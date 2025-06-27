@@ -8,6 +8,106 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 };
 
+async function getScanStatus(scanUuid: string) {
+  try {
+    const resultResponse = await fetch(`https://urlscan.io/api/v1/result/${scanUuid}/`);
+    
+    if (!resultResponse.ok) {
+      if (resultResponse.status === 404) {
+        return new Response(
+          JSON.stringify({
+            status: 'processing',
+            progress: 50,
+            message: 'Scan in progress...',
+            uuid: scanUuid
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw new Error(`HTTP ${resultResponse.status}: ${resultResponse.statusText}`);
+    }
+
+    const resultData = await resultResponse.json();
+    
+    // Check if scan is complete by verifying essential data exists
+    if (!resultData.task || !resultData.task.url) {
+      return new Response(
+        JSON.stringify({
+          status: 'processing',
+          progress: 75,
+          message: 'Generating report and screenshot...',
+          uuid: scanUuid
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Scan is complete, return full results
+    let screenshotUrl = resultData.task?.screenshotURL || 
+                       resultData.screenshotURL || 
+                       `https://urlscan.io/screenshots/${scanUuid}.png`;
+    
+    // Extract detailed scan results
+    const httpRequests = resultData.data?.requests?.map((req: any) => ({
+      url: req.request?.url || '',
+      method: req.request?.method || 'GET',
+      status: req.response?.status || 0,
+      type: req.request?.type || 'unknown',
+      size: req.response?.dataLength || 0
+    })) || [];
+
+    const redirects = resultData.data?.requests?.filter((req: any) => 
+      req.response?.status >= 300 && req.response?.status < 400
+    ).map((req: any) => ({
+      from: req.request?.url || '',
+      to: req.response?.location || '',
+      status: req.response?.status || 0
+    })) || [];
+
+    const behaviors = [
+      ...(resultData.lists?.ips?.map((ip: string) => `Connected to IP: ${ip}`) || []),
+      ...(resultData.lists?.domains?.map((domain: string) => `Accessed domain: ${domain}`) || []),
+      ...(resultData.lists?.urls?.filter((url: string) => url !== resultData.task.url).slice(0, 5).map((url: string) => `Made request to: ${url}`) || [])
+    ];
+
+    const formattedResult = {
+      status: 'complete',
+      progress: 100,
+      url: resultData.task.url,
+      verdict: determineVerdict(resultData),
+      screenshotUrl: screenshotUrl,
+      reportUrl: `https://urlscan.io/result/${scanUuid}/`,
+      score: calculateRiskScore(resultData),
+      uuid: scanUuid,
+      analysis: {
+        requests: resultData.stats?.uniqRequests || httpRequests.length,
+        domains: resultData.stats?.uniqDomains || 0,
+        ips: resultData.stats?.uniqIPs || 0,
+        countries: Array.from(new Set(resultData.lists?.countries || [])).slice(0, 3)
+      },
+      httpRequests: httpRequests.slice(0, 10), // Limit to first 10 for display
+      redirects: redirects.slice(0, 5),
+      behaviors: behaviors.slice(0, 8)
+    };
+
+    return new Response(
+      JSON.stringify(formattedResult),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Error getting scan status:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to get scan status',
+        status: 'error',
+        uuid: scanUuid
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -15,9 +115,15 @@ serve(async (req) => {
   }
 
   try {
-    const { url } = await req.json();
-    console.log('Scanning URL:', url);
+    const { url, uuid } = await req.json();
+    console.log('Request params:', { url, uuid });
 
+    // If UUID is provided, get status of existing scan
+    if (uuid) {
+      return await getScanStatus(uuid);
+    }
+
+    // Otherwise, submit new scan
     if (!url) {
       return new Response(
         JSON.stringify({ error: 'URL is required' }),
@@ -58,96 +164,22 @@ serve(async (req) => {
     const submitData = await submitResponse.json();
     console.log('URLScan submit response:', submitData);
 
-    const uuid = submitData.uuid;
-    const maxAttempts = 20; // Max 20 attempts, with 5-second delay = 100 seconds total
-    const delayMs = 5000; // 5 seconds
-
-    let resultData: any;
-    let scanComplete = false;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise(resolve => setTimeout(resolve, delayMs)); // Wait before polling
-      const resultResponse = await fetch(`https://urlscan.io/api/v1/result/${uuid}/`);
-
-      if (resultResponse.ok) {
-        resultData = await resultResponse.json();
-        if (resultData.task && resultData.task.url) { // Check if scan data is substantial
-          scanComplete = true;
-          break;
-        }
-      }
-      console.log(`Attempt ${i + 1}/${maxAttempts}: Scan still processing for UUID ${uuid}`);
-    }
-
-    if (!scanComplete) {
-      return new Response(
-        JSON.stringify({
-          url: url,
-          verdict: 'scanning',
-          screenshotUrl: null,
-          reportUrl: `https://urlscan.io/result/${uuid}/`,
-          score: 0,
-          analysis: {
-            requests: 0,
-            domains: 0,
-            ips: 0,
-            countries: []
-          },
-          message: 'Scan timed out. Check the report URL for updates or try again later.'
-        }),
-        { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('URLScan result:', resultData);
-
-    // Format the response
-    let screenshotUrl = resultData.task?.screenshotURL || 
-                       resultData.screenshotURL || 
-                       (resultData.task?.url ? `https://urlscan.io/screenshots/${uuid}.png` : null);
-    
-    // If we have a screenshot URL, try to verify it's accessible
-    if (screenshotUrl) {
-      try {
-        const screenshotResponse = await fetch(screenshotUrl, { 
-          method: 'HEAD',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        });
-        if (!screenshotResponse.ok) {
-          console.log('Screenshot URL not accessible, using fallback');
-          screenshotUrl = null;
-        }
-      } catch (error) {
-        console.log('Error checking screenshot URL:', error);
-        // Keep the URL, let the frontend handle the error
-      }
-    }
-    
-    const formattedResult = {
-      url: url,
-      verdict: determineVerdict(resultData),
-      screenshotUrl: screenshotUrl,
-      reportUrl: `https://urlscan.io/result/${uuid}/`,
-      score: calculateRiskScore(resultData),
-      analysis: {
-        requests: resultData.stats?.malicious || 0,
-        domains: resultData.stats?.uniqDomains || 0,
-        ips: resultData.stats?.uniqIPs || 0,
-        countries: resultData.stats?.uniqCountries ? Array.from(new Set(resultData.lists?.countries || [])).slice(0, 3) : []
-      }
-    };
-
+    // Return the UUID for polling
     return new Response(
-      JSON.stringify(formattedResult),
+      JSON.stringify({
+        status: 'submitted',
+        progress: 10,
+        message: 'URL submitted for scanning...',
+        uuid: submitData.uuid,
+        reportUrl: `https://urlscan.io/result/${submitData.uuid}/`
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in urlscan-analysis function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message, status: 'error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

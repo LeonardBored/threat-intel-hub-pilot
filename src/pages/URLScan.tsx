@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, ExternalLink, Camera, Shield, Copy, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,18 +8,38 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
+interface HTTPRequest {
+  url: string;
+  method: string;
+  status: number;
+  type: string;
+  size: number;
+}
+
+interface Redirect {
+  from: string;
+  to: string;
+  status: number;
+}
+
 interface URLScanResult {
   url: string;
   verdict: 'safe' | 'malicious' | 'suspicious' | 'scanning';
   screenshotUrl: string | null;
   reportUrl: string;
   score: number;
+  uuid?: string;
+  status?: 'submitted' | 'processing' | 'complete' | 'error';
+  progress?: number;
   analysis: {
     requests: number;
     domains: number;
     ips: number;
     countries: string[];
   };
+  httpRequests?: HTTPRequest[];
+  redirects?: Redirect[];
+  behaviors?: string[];
   message?: string;
 }
 
@@ -29,6 +49,61 @@ export default function URLScan() {
   const [result, setResult] = useState<URLScanResult | null>(null);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState('');
+  const [scanUuid, setScanUuid] = useState<string | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+
+  const pollScanStatus = async (uuid: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
+        body: { uuid }
+      });
+
+      if (error) {
+        console.error('Polling error:', error);
+        return;
+      }
+
+      if (data.status === 'complete') {
+        // Scan is complete
+        setResult(data);
+        setScanProgress(100);
+        setScanStatus('Scan complete!');
+        setLoading(false);
+        setScanUuid(null);
+        
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+
+        toast({
+          title: "Scan Complete",
+          description: `URL analysis finished for: ${data.url}`,
+        });
+      } else if (data.status === 'processing') {
+        // Update progress
+        setScanProgress(data.progress || 50);
+        setScanStatus(data.message || 'Scan in progress...');
+      } else if (data.status === 'error') {
+        // Handle error
+        setLoading(false);
+        setScanUuid(null);
+        
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+
+        toast({
+          title: "Scan Failed",
+          description: data.error || "An error occurred during scanning",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+    }
+  };
 
   const handleScan = async () => {
     if (!url.trim()) {
@@ -38,6 +113,12 @@ export default function URLScan() {
         variant: "destructive"
       });
       return;
+    }
+
+    // Clear any existing polling
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
     }
 
     let processedUrl = url.trim();
@@ -55,36 +136,13 @@ export default function URLScan() {
     setLoading(true);
     setScanProgress(0);
     setScanStatus('Submitting URL for analysis...');
+    setResult(null);
     
     try {
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setScanProgress(prev => {
-          if (prev < 90) {
-            const increment = Math.random() * 15 + 5;
-            const newProgress = Math.min(prev + increment, 90);
-            
-            if (newProgress < 30) {
-              setScanStatus('Submitting URL for analysis...');
-            } else if (newProgress < 60) {
-              setScanStatus('URL scan in progress...');
-            } else {
-              setScanStatus('Generating screenshot and report...');
-            }
-            
-            return newProgress;
-          }
-          return prev;
-        });
-      }, 800);
-
+      // Submit URL for scanning
       const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
         body: { url: processedUrl }
       });
-
-      clearInterval(progressInterval);
-      setScanProgress(100);
-      setScanStatus('Scan complete!');
 
       if (error) {
         console.error('Supabase function error:', error);
@@ -93,6 +151,7 @@ export default function URLScan() {
           description: error.message || "Failed to scan the URL. Please try again.",
           variant: "destructive"
         });
+        setLoading(false);
         return;
       }
 
@@ -102,15 +161,40 @@ export default function URLScan() {
           description: data.error,
           variant: "destructive"
         });
+        setLoading(false);
         return;
       }
 
-      setResult(data);
+      // Scan submitted successfully, start polling
+      setScanUuid(data.uuid);
+      setScanProgress(data.progress || 10);
+      setScanStatus(data.message || 'URL submitted for scanning...');
+
+      // Start polling for updates every 3 seconds
+      const interval = setInterval(() => {
+        pollScanStatus(data.uuid);
+      }, 3000);
       
-      toast({
-        title: "Scan Complete",
-        description: `URL analysis finished for: ${processedUrl}`,
+      setPollingInterval(interval);
+
+      // Also set initial result with basic info
+      setResult({
+        url: processedUrl,
+        verdict: 'scanning',
+        screenshotUrl: null,
+        reportUrl: data.reportUrl || '',
+        score: 0,
+        uuid: data.uuid,
+        status: data.status,
+        progress: data.progress,
+        analysis: {
+          requests: 0,
+          domains: 0,
+          ips: 0,
+          countries: []
+        }
       });
+
     } catch (error) {
       console.error('Scan error:', error);
       toast({
@@ -118,10 +202,7 @@ export default function URLScan() {
         description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
-    } finally {
       setLoading(false);
-      setScanProgress(0);
-      setScanStatus('');
     }
   };
 
@@ -145,6 +226,15 @@ export default function URLScan() {
     if (score < 70) return 'text-yellow-400';
     return 'text-red-400';
   };
+
+  // Cleanup polling interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   return (
     <div className="space-y-6">
@@ -364,6 +454,91 @@ export default function URLScan() {
                   </Card>
                 </div>
               </div>
+
+              {/* Additional Details - Only show when scan is complete */}
+              {result.status === 'complete' && (result.httpRequests || result.redirects || result.behaviors) && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-primary border-b border-primary/20 pb-2">
+                    Detailed Analysis
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* HTTP Requests */}
+                    {result.httpRequests && result.httpRequests.length > 0 && (
+                      <Card className="bg-muted/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">HTTP Requests ({result.httpRequests.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                          {result.httpRequests.map((req, index) => (
+                            <div key={index} className="text-xs space-y-1 p-2 bg-muted/30 rounded">
+                              <div className="flex justify-between items-start">
+                                <span className="font-mono text-primary truncate flex-1 mr-2">
+                                  {req.method} {req.url.length > 50 ? req.url.substring(0, 50) + '...' : req.url}
+                                </span>
+                                <span className={`px-1 rounded text-xs ${
+                                  req.status >= 200 && req.status < 300 ? 'bg-green-500/20 text-green-400' :
+                                  req.status >= 300 && req.status < 400 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  req.status >= 400 ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'
+                                }`}>
+                                  {req.status}
+                                </span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                Type: {req.type} | Size: {(req.size / 1024).toFixed(1)}KB
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Redirects */}
+                    {result.redirects && result.redirects.length > 0 && (
+                      <Card className="bg-muted/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Redirects ({result.redirects.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                          {result.redirects.map((redirect, index) => (
+                            <div key={index} className="text-xs space-y-1 p-2 bg-muted/30 rounded">
+                              <div className="flex items-center justify-between">
+                                <span className="text-yellow-400 font-semibold">{redirect.status}</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                From: <span className="text-primary font-mono text-xs">
+                                  {redirect.from.length > 40 ? redirect.from.substring(0, 40) + '...' : redirect.from}
+                                </span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                To: <span className="text-primary font-mono text-xs">
+                                  {redirect.to.length > 40 ? redirect.to.substring(0, 40) + '...' : redirect.to}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Behaviors */}
+                    {result.behaviors && result.behaviors.length > 0 && (
+                      <Card className="bg-muted/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Observed Behaviors ({result.behaviors.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                          {result.behaviors.map((behavior, index) => (
+                            <div key={index} className="text-xs p-2 bg-muted/30 rounded">
+                              <span className="text-primary">{behavior}</span>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -371,15 +546,18 @@ export default function URLScan() {
 
       <Card className="cyber-card border-green-500/20">
         <CardHeader>
-          <CardTitle className="text-green-400">✅ Live URLScan.io Integration</CardTitle>
+          <CardTitle className="text-green-400">✅ Real-Time URLScan.io Integration</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            This scanner is now connected to the real URLScan.io API and will provide live scan results 
-            with real screenshots and comprehensive analysis data.
+            This scanner provides real-time URLScan.io analysis with live progress updates, comprehensive 
+            scan results including HTTP requests, redirects, and behavioral analysis.
           </p>
           <p className="text-xs text-muted-foreground mb-2">
-            Your API key is securely stored in Supabase and accessed through encrypted edge functions.
+            • Real-time progress tracking during scan execution<br/>
+            • Live screenshot updates as they become available<br/>
+            • Detailed HTTP request and redirect analysis<br/>
+            • Behavioral pattern detection and reporting
           </p>
           <p className="text-xs text-yellow-400">
             Note: Screenshots are loaded from URLScan.io's CDN. If images don't display due to CORS restrictions, 
