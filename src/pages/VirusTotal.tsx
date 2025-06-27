@@ -1,22 +1,24 @@
 
 import { useState } from 'react';
-import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ScanResult {
   summary: string;
   detectionRatio: string;
-  verdict: 'clean' | 'malicious' | 'suspicious';
+  verdict: 'clean' | 'malicious' | 'suspicious' | 'unknown' | 'scanning';
   vendors: Array<{
     name: string;
     result: string;
     category: string;
   }>;
+  rawData?: any;
 }
 
 export default function VirusTotal() {
@@ -36,29 +38,46 @@ export default function VirusTotal() {
 
     setLoading(true);
     
-    // Simulate API call with mock data
-    setTimeout(() => {
-      const mockResult: ScanResult = {
-        summary: input.includes('malware') ? 'Malicious content detected' : 'No threats detected',
-        detectionRatio: input.includes('malware') ? '15/68' : '0/68',
-        verdict: input.includes('malware') ? 'malicious' : 'clean',
-        vendors: [
-          { name: 'Microsoft', result: input.includes('malware') ? 'Trojan:Win32/Malware' : 'Clean', category: 'antivirus' },
-          { name: 'Kaspersky', result: input.includes('malware') ? 'HEUR:Trojan.Generic' : 'Clean', category: 'antivirus' },
-          { name: 'Symantec', result: 'Clean', category: 'antivirus' },
-          { name: 'McAfee', result: 'Clean', category: 'antivirus' },
-          { name: 'Avast', result: input.includes('malware') ? 'Malware-gen' : 'Clean', category: 'antivirus' },
-        ]
-      };
-      
-      setResult(mockResult);
-      setLoading(false);
+    try {
+      const { data, error } = await supabase.functions.invoke('virustotal-scan', {
+        body: { input: input.trim() }
+      });
+
+      if (error) {
+        console.error('Supabase function error:', error);
+        toast({
+          title: "Scan Failed",
+          description: error.message || "Failed to scan the target. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (data.error) {
+        toast({
+          title: "Scan Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setResult(data);
       
       toast({
         title: "Scan Complete",
         description: `Analysis finished for: ${input}`,
       });
-    }, 2000);
+    } catch (error) {
+      console.error('Scan error:', error);
+      toast({
+        title: "Scan Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getVerdictIcon = (verdict: string) => {
@@ -69,6 +88,8 @@ export default function VirusTotal() {
         return <XCircle className="h-5 w-5 text-red-400" />;
       case 'suspicious':
         return <AlertTriangle className="h-5 w-5 text-yellow-400" />;
+      case 'scanning':
+        return <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />;
       default:
         return <AlertTriangle className="h-5 w-5 text-gray-400" />;
     }
@@ -82,6 +103,8 @@ export default function VirusTotal() {
         return 'text-red-400';
       case 'suspicious':
         return 'text-yellow-400';
+      case 'scanning':
+        return 'text-blue-400';
       default:
         return 'text-gray-400';
     }
@@ -119,7 +142,8 @@ export default function VirusTotal() {
                 placeholder="e.g., google.com, 8.8.8.8, or file hash..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleScan()}
+                disabled={loading}
               />
               <Button 
                 onClick={handleScan} 
@@ -127,7 +151,8 @@ export default function VirusTotal() {
                 className="cyber-button min-w-[100px]"
               >
                 {loading ? (
-                  <div className="scan-indicator w-full h-full flex items-center justify-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Scanning...
                   </div>
                 ) : (
@@ -191,52 +216,67 @@ export default function VirusTotal() {
                   </Card>
                 </div>
 
-                <Card className="cyber-card">
-                  <CardHeader>
-                    <CardTitle>Vendor Analysis Results</CardTitle>
-                    <CardDescription>
-                      Detailed detection results from security vendors
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {result.vendors.map((vendor, index) => (
-                        <div 
-                          key={index}
-                          className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
-                        >
-                          <div className="font-medium">{vendor.name}</div>
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              variant={vendor.result === 'Clean' ? 'secondary' : 'destructive'}
-                              className="font-mono"
-                            >
-                              {vendor.result}
-                            </Badge>
+                {result.vendors.length > 0 && (
+                  <Card className="cyber-card">
+                    <CardHeader>
+                      <CardTitle>Vendor Analysis Results</CardTitle>
+                      <CardDescription>
+                        Detailed detection results from security vendors
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {result.vendors.map((vendor, index) => (
+                          <div 
+                            key={index}
+                            className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
+                          >
+                            <div className="font-medium">{vendor.name}</div>
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant={vendor.result === 'Clean' || !vendor.result ? 'secondary' : 'destructive'}
+                                className="font-mono"
+                              >
+                                {vendor.result || 'Clean'}
+                              </Badge>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {result.verdict === 'unknown' && (
+                  <Card className="cyber-card border-yellow-500/20">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 text-yellow-400">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="font-medium">No Analysis Available</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        This target hasn't been analyzed by VirusTotal yet. Try submitting it for analysis first.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card className="cyber-card">
+      <Card className="cyber-card border-green-500/20">
         <CardHeader>
-          <CardTitle className="text-yellow-400">⚠ API Integration Required</CardTitle>
+          <CardTitle className="text-green-400">✅ Live VirusTotal Integration</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            To enable live VirusTotal scanning, you'll need to connect this platform to Supabase 
-            and configure your VirusTotal API key in the backend.
+            This scanner is now connected to the real VirusTotal API and will provide live scan results 
+            from over 70 antivirus engines and security vendors.
           </p>
           <p className="text-xs text-muted-foreground">
-            The interface above shows simulated results. Real integration requires proper API key management 
-            for security compliance.
+            Your API key is securely stored in Supabase and accessed through encrypted edge functions.
           </p>
         </CardContent>
       </Card>
