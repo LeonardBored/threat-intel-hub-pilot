@@ -56,112 +56,235 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in virustotal-scan function:', error);
+    
+    // Return a user-friendly error message
+    let errorMessage = 'An unexpected error occurred';
+    if (error.message) {
+      if (error.message.includes('API key')) {
+        errorMessage = 'VirusTotal API key configuration error';
+      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+        errorMessage = 'VirusTotal API rate limit exceeded. Please try again later.';
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = 'Network error connecting to VirusTotal. Please try again.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: errorMessage,
+        summary: 'Scan failed',
+        detectionRatio: '0/0',
+        verdict: 'unknown',
+        vendors: []
+      }),
+      { 
+        status: 200, // Return 200 to prevent frontend errors
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   }
 });
 
 async function scanUrl(url: string, apiKey: string) {
   // Try to get existing analysis first
-  const urlId = btoa(url).replace(/=/g, '');
+  const urlId = btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   
-  const existingResponse = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
-    headers: {
-      'x-apikey': apiKey,
-    },
-  });
-
-  if (existingResponse.ok) {
-    const existingData = await existingResponse.json();
-    return formatScanResultV3(existingData, url, 'url');
-  }
-
-  // If no existing analysis, submit for new analysis
-  const submitResponse = await fetch('https://www.virustotal.com/api/v3/urls', {
-    method: 'POST',
-    headers: {
-      'x-apikey': apiKey,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `url=${encodeURIComponent(url)}`,
-  });
-
-  if (!submitResponse.ok) {
-    throw new Error('Failed to submit URL for analysis');
-  }
-
-  const submitData = await submitResponse.json();
-  const analysisId = submitData.data.id;
-
-  // Wait for analysis to complete
-  let attempts = 0;
-  const maxAttempts = 10;
-  
-  while (attempts < maxAttempts) {
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const reportResponse = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+  try {
+    const existingResponse = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
       headers: {
         'x-apikey': apiKey,
       },
     });
 
-    const reportData = await reportResponse.json();
-    
-    if (reportData.data?.attributes?.status === 'completed') {
-      return formatScanResultV3(reportData, url, 'url');
+    if (existingResponse.ok) {
+      const existingData = await existingResponse.json();
+      if (existingData.data && existingData.data.attributes) {
+        return formatScanResultV3(existingData, url, 'url');
+      }
     }
-    
-    attempts++;
+  } catch (error) {
+    console.log('No existing analysis found, submitting new scan');
   }
 
-  // If analysis is still not complete, return scanning status
-  return {
-    summary: 'Analysis in progress',
-    detectionRatio: 'Scanning...',
-    verdict: 'scanning',
-    vendors: [],
-    rawData: { status: 'scanning' }
-  };
+  // If no existing analysis, submit for new analysis
+  try {
+    const submitResponse = await fetch('https://www.virustotal.com/api/v3/urls', {
+      method: 'POST',
+      headers: {
+        'x-apikey': apiKey,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `url=${encodeURIComponent(url)}`,
+    });
+
+    if (!submitResponse.ok) {
+      throw new Error(`Failed to submit URL for analysis: ${submitResponse.status}`);
+    }
+
+    const submitData = await submitResponse.json();
+    const analysisId = submitData.data?.id;
+
+    if (!analysisId) {
+      throw new Error('No analysis ID returned from VirusTotal');
+    }
+
+    // Wait for analysis to complete with shorter timeout for edge functions
+    let attempts = 0;
+    const maxAttempts = 5; // Reduced for edge function timeout limits
+    
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Reduced wait time
+      
+      try {
+        const reportResponse = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+          headers: {
+            'x-apikey': apiKey,
+          },
+        });
+
+        if (reportResponse.ok) {
+          const reportData = await reportResponse.json();
+          
+          if (reportData.data?.attributes?.status === 'completed') {
+            return formatScanResultV3(reportData, url, 'url');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking analysis status:', error);
+      }
+      
+      attempts++;
+    }
+
+    // If analysis is still not complete, return scanning status
+    return {
+      summary: 'Analysis in progress - check back in a few minutes',
+      detectionRatio: 'Scanning...',
+      verdict: 'scanning',
+      vendors: [],
+      rawData: { status: 'scanning' },
+      virusTotalUrl: getVirusTotalUrl(url, 'url')
+    };
+  } catch (error) {
+    console.error('URL scan error:', error);
+    return {
+      summary: 'Scan failed - please try again',
+      detectionRatio: '0/0',
+      verdict: 'unknown',
+      vendors: [],
+      rawData: { error: error.message },
+      virusTotalUrl: getVirusTotalUrl(url, 'url')
+    };
+  }
 }
 
 async function scanHash(hash: string, apiKey: string) {
-  const response = await fetch(`https://www.virustotal.com/api/v3/files/${hash}`, {
-    headers: {
-      'x-apikey': apiKey,
-    },
-  });
-  
-  const data = await response.json();
-  return formatScanResultV3(data, hash, 'file');
+  try {
+    const response = await fetch(`https://www.virustotal.com/api/v3/files/${hash}`, {
+      headers: {
+        'x-apikey': apiKey,
+      },
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return {
+          summary: 'File not found in VirusTotal database',
+          detectionRatio: '0/0',
+          verdict: 'unknown',
+          vendors: [],
+          rawData: { error: 'File not found' },
+          virusTotalUrl: getVirusTotalUrl(hash, 'file')
+        };
+      }
+      throw new Error(`VirusTotal API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return formatScanResultV3(data, hash, 'file');
+  } catch (error) {
+    console.error('Hash scan error:', error);
+    return {
+      summary: 'Scan failed - please try again',
+      detectionRatio: '0/0',
+      verdict: 'unknown',
+      vendors: [],
+      rawData: { error: error.message },
+      virusTotalUrl: getVirusTotalUrl(hash, 'file')
+    };
+  }
 }
 
 async function scanIp(ip: string, apiKey: string) {
-  const response = await fetch(`https://www.virustotal.com/api/v3/ip_addresses/${ip}`, {
-    headers: {
-      'x-apikey': apiKey,
-    },
-  });
-  
-  const data = await response.json();
-  return formatScanResultV3(data, ip, 'ip');
+  try {
+    const response = await fetch(`https://www.virustotal.com/api/v3/ip_addresses/${ip}`, {
+      headers: {
+        'x-apikey': apiKey,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`VirusTotal API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return formatScanResultV3(data, ip, 'ip');
+  } catch (error) {
+    console.error('IP scan error:', error);
+    return {
+      summary: 'Scan failed - please try again',
+      detectionRatio: '0/0',
+      verdict: 'unknown',
+      vendors: [],
+      rawData: { error: error.message },
+      virusTotalUrl: getVirusTotalUrl(ip, 'ip')
+    };
+  }
 }
 
 async function scanDomain(domain: string, apiKey: string) {
-  const response = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
-    headers: {
-      'x-apikey': apiKey,
-    },
-  });
-  
-  const data = await response.json();
-  return formatScanResultV3(data, domain, 'domain');
+  try {
+    const response = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
+      headers: {
+        'x-apikey': apiKey,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`VirusTotal API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return formatScanResultV3(data, domain, 'domain');
+  } catch (error) {
+    console.error('Domain scan error:', error);
+    return {
+      summary: 'Scan failed - please try again',
+      detectionRatio: '0/0',
+      verdict: 'unknown',
+      vendors: [],
+      rawData: { error: error.message },
+      virusTotalUrl: getVirusTotalUrl(domain, 'domain')
+    };
+  }
 }
 
 function formatScanResultV3(data: any, input: string, type: string = 'unknown') {
   console.log('VirusTotal v3 response:', data);
+
+  // Handle API errors
+  if (data.error) {
+    return {
+      summary: `API Error: ${data.error.message || 'Unknown error'}`,
+      detectionRatio: '0/0',
+      verdict: 'unknown',
+      vendors: [],
+      rawData: data,
+      virusTotalUrl: getVirusTotalUrl(input, type)
+    };
+  }
 
   if (!data.data) {
     return {
@@ -196,7 +319,7 @@ function formatScanResultV3(data: any, input: string, type: string = 'unknown') 
   const failure = stats.failure || 0;
   
   const total = malicious + suspicious + clean + undetected + timeout + failure;
-  const detectionRatio = `${malicious + suspicious}/${total}`;
+  const detectionRatio = total > 0 ? `${malicious + suspicious}/${total}` : '0/0';
 
   // Determine verdict based on VirusTotal's actual logic
   let verdict = 'clean';
@@ -313,78 +436,23 @@ function mapVirusTotalCategory(category: string): string {
 
 function getVirusTotalUrl(input: string, type: string): string {
   // Generate the correct VirusTotal URL based on input type
-  switch (type) {
-    case 'url':
-      // For URLs, encode them properly for VirusTotal
-      const urlId = btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      return `https://www.virustotal.com/gui/url/${urlId}`;
-    case 'file':
-      return `https://www.virustotal.com/gui/file/${input}`;
-    case 'ip':
-      return `https://www.virustotal.com/gui/ip-address/${input}`;
-    case 'domain':
-      return `https://www.virustotal.com/gui/domain/${input}`;
-    default:
-      return `https://www.virustotal.com/gui/search/${encodeURIComponent(input)}`;
-  }
-}
-
-function formatScanResult(data: any, input: string) {
-  console.log('VirusTotal response:', data);
-
-  if (data.response_code === 0) {
-    return {
-      summary: 'No results found',
-      detectionRatio: '0/0',
-      verdict: 'unknown',
-      vendors: [],
-      rawData: data
-    };
-  }
-
-  if (data.response_code === -2) {
-    return {
-      summary: 'Analysis in progress',
-      detectionRatio: 'Scanning...',
-      verdict: 'scanning',
-      vendors: [],
-      rawData: data
-    };
-  }
-
-  const positives = data.positives || 0;
-  const total = data.total || 0;
-  const detectionRatio = `${positives}/${total}`;
-
-  let verdict = 'clean';
-  let summary = 'No threats detected';
-
-  if (positives > 0) {
-    if (positives > total * 0.1) {
-      verdict = 'malicious';
-      summary = 'Malicious content detected';
-    } else {
-      verdict = 'suspicious';
-      summary = 'Suspicious content detected';
+  try {
+    switch (type) {
+      case 'url':
+        // For URLs, encode them properly for VirusTotal
+        const urlId = btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        return `https://www.virustotal.com/gui/url/${urlId}`;
+      case 'file':
+        return `https://www.virustotal.com/gui/file/${input}`;
+      case 'ip':
+        return `https://www.virustotal.com/gui/ip-address/${input}`;
+      case 'domain':
+        return `https://www.virustotal.com/gui/domain/${input}`;
+      default:
+        return `https://www.virustotal.com/gui/search/${encodeURIComponent(input)}`;
     }
+  } catch (error) {
+    console.error('Error generating VirusTotal URL:', error);
+    return `https://www.virustotal.com/gui/search/${encodeURIComponent(input)}`;
   }
-
-  const vendors: Array<{name: string, result: string, category: string}> = [];
-  if (data.scans) {
-    for (const [vendorName, scanResult] of Object.entries(data.scans as Record<string, any>)) {
-      vendors.push({
-        name: vendorName,
-        result: scanResult.result || 'Clean',
-        category: 'antivirus'
-      });
-    }
-  }
-
-  return {
-    summary,
-    detectionRatio,
-    verdict,
-    vendors: vendors.slice(0, 10), // Limit to first 10 vendors for UI
-    rawData: data
-  };
 }
