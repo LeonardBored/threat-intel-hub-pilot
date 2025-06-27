@@ -27,6 +27,8 @@ export default function URLScan() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<URLScanResult | null>(null);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanStatus, setScanStatus] = useState('');
 
   const handleScan = async () => {
     if (!url.trim()) {
@@ -51,11 +53,38 @@ export default function URLScan() {
     }
 
     setLoading(true);
+    setScanProgress(0);
+    setScanStatus('Submitting URL for analysis...');
     
     try {
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setScanProgress(prev => {
+          if (prev < 90) {
+            const increment = Math.random() * 15 + 5;
+            const newProgress = Math.min(prev + increment, 90);
+            
+            if (newProgress < 30) {
+              setScanStatus('Submitting URL for analysis...');
+            } else if (newProgress < 60) {
+              setScanStatus('URL scan in progress...');
+            } else {
+              setScanStatus('Generating screenshot and report...');
+            }
+            
+            return newProgress;
+          }
+          return prev;
+        });
+      }, 800);
+
       const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
         body: { url: processedUrl }
       });
+
+      clearInterval(progressInterval);
+      setScanProgress(100);
+      setScanStatus('Scan complete!');
 
       if (error) {
         console.error('Supabase function error:', error);
@@ -91,6 +120,8 @@ export default function URLScan() {
       });
     } finally {
       setLoading(false);
+      setScanProgress(0);
+      setScanStatus('');
     }
   };
 
@@ -169,6 +200,25 @@ export default function URLScan() {
               </Button>
             </div>
           </div>
+
+          {/* Progress bar when loading */}
+          {loading && (
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{scanStatus}</span>
+                <span className="text-primary">{Math.round(scanProgress)}%</span>
+              </div>
+              <div className="w-full bg-muted/20 rounded-full h-2">
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${scanProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                URLScan.io is analyzing the website and capturing a screenshot...
+              </p>
+            </div>
+          )}
 
           {result && (
             <div className="space-y-6 mt-6">

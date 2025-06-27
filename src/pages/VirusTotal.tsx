@@ -97,6 +97,22 @@ export default function VirusTotal() {
     }
   };
 
+  // Helper function to get vendor result color
+  const getVendorResultColor = (result: string) => {
+    if (!result || result === 'Clean' || result === 'Undetected') {
+      return 'text-green-400 bg-green-900/20';
+    }
+    if (result.toLowerCase().includes('malicious') || 
+        result.toLowerCase().includes('trojan') || 
+        result.toLowerCase().includes('virus') || 
+        result.toLowerCase().includes('malware') ||
+        result.toLowerCase().includes('phishing') ||
+        result.toLowerCase().includes('suspicious')) {
+      return 'text-red-400 bg-red-900/20';
+    }
+    return 'text-gray-400 bg-gray-900/20'; // Unrated/Unknown
+  };
+
   const getVerdictIcon = (verdict: string) => {
     switch (verdict) {
       case 'clean':
@@ -279,8 +295,8 @@ export default function VirusTotal() {
                             <div className="font-medium">{vendor.name}</div>
                             <div className="flex items-center gap-2">
                               <Badge 
-                                variant={vendor.result === 'Clean' || !vendor.result ? 'secondary' : 'destructive'}
-                                className="font-mono"
+                                variant="outline"
+                                className={`font-mono ${getVendorResultColor(vendor.result)}`}
                               >
                                 {vendor.result || 'Clean'}
                               </Badge>

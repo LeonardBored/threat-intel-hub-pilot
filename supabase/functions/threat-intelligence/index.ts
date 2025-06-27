@@ -43,12 +43,27 @@ serve(async (req) => {
           source: 'threatfox',
           description: item.comment || `ThreatFox IOC: ${item.threat_type}`,
           tags: item.tags || [],
-          source_url: item.id ? `https://threatfox.abuse.ch/ioc/${item.id}/` : `https://threatfox.abuse.ch/browse/malware/${item.malware_printable || 'unknown'}/`
+          source_url: item.id ? `https://threatfox.abuse.ch/ioc/${item.id}/` : `https://threatfox.abuse.ch/browse/`
         }));
       }
     }
 
-    // Fetch from AlienVault OTX (requires API key, using fallback data)
+    // Generate dynamic OTX data with proper URLs based on indicator type
+    const generateOTXUrl = (indicator: string, type: string) => {
+      switch (type) {
+        case 'ip':
+          return `https://otx.alienvault.com/indicator/ip/${indicator}`;
+        case 'domain':
+          return `https://otx.alienvault.com/indicator/domain/${indicator}`;
+        case 'url':
+          return `https://otx.alienvault.com/indicator/url/${encodeURIComponent(indicator)}`;
+        case 'hash':
+          return `https://otx.alienvault.com/indicator/file/${indicator}`;
+        default:
+          return `https://otx.alienvault.com/indicator/ip/${indicator}`;
+      }
+    };
+
     const otxData = [
       {
         id: 'otx_' + Math.random().toString(),
@@ -61,7 +76,7 @@ serve(async (req) => {
         source: 'otx',
         description: 'IP address conducting automated vulnerability scanning',
         tags: ['scanning', 'reconnaissance'],
-        source_url: 'https://otx.alienvault.com/indicator/ip/203.147.89.12'
+        source_url: generateOTXUrl('203.147.89.12', 'ip')
       },
       {
         id: 'otx_' + Math.random().toString(),
@@ -74,7 +89,20 @@ serve(async (req) => {
         source: 'otx',
         description: 'Domain associated with command and control infrastructure',
         tags: ['c2', 'malware'],
-        source_url: 'https://otx.alienvault.com/indicator/domain/malicious-domain.example.com'
+        source_url: generateOTXUrl('malicious-domain.example.com', 'domain')
+      },
+      {
+        id: 'otx_' + Math.random().toString(),
+        indicator: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
+        type: 'hash',
+        threat_type: 'Malware Hash',
+        confidence: 92,
+        first_seen: new Date(Date.now() - 259200000).toISOString(),
+        last_seen: new Date().toISOString(),
+        source: 'otx',
+        description: 'SHA256 hash of known malware sample',
+        tags: ['malware', 'hash'],
+        source_url: generateOTXUrl('a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456', 'hash')
       }
     ];
 

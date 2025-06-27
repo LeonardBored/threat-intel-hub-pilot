@@ -268,11 +268,14 @@ export default function ThreatIntel() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            This module now displays real-time threat intelligence data from ThreatFox and other sources.
-            Data is automatically updated and filtered to show the most recent indicators of compromise.
+            This module displays real-time threat intelligence data from ThreatFox and AlienVault OTX.
+            Each IOC links directly to its detailed analysis page on the respective platform.
+          </p>
+          <p className="text-xs text-muted-foreground mb-2">
+            • ThreatFox IOCs link to: https://threatfox.abuse.ch/ioc/{'{id}'}/
           </p>
           <p className="text-xs text-muted-foreground">
-            Real implementation fetches and updates IOCs from multiple sources with proper rate limiting.
+            • AlienVault OTX indicators link to: https://otx.alienvault.com/indicator/{'{type}'}/{'{indicator}'}
           </p>
         </CardContent>
       </Card>
