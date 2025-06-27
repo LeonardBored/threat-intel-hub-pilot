@@ -16,10 +16,10 @@ interface Message {
 }
 
 const sampleQueries = [
-  "Generate a Splunk query to find failed login attempts from suspicious IPs",
-  "Create a CloudFormation template for a secure S3 bucket with logging",
-  "Show me the incident response steps for a potential data breach",
-  "Write an Elasticsearch query to detect unusual network activity"
+  "Generate a Splunk query for failed login attempts",
+  "Create a secure S3 bucket CloudFormation template",
+  "Show incident response steps for data breach",
+  "Write Elasticsearch query for network anomalies"
 ];
 
 export default function AIChat() {
@@ -315,10 +315,10 @@ Try asking me something like: "Generate a Splunk query for detecting brute force
                 key={index}
                 variant="outline"
                 size="sm"
-                className="w-full text-left h-auto p-2 text-xs hover:bg-primary/10"
+                className="w-full text-left h-auto p-3 text-xs hover:bg-primary/10 whitespace-normal leading-relaxed"
                 onClick={() => setInput(query)}
               >
-                {query}
+                <span className="break-words text-left w-full">{query}</span>
               </Button>
             ))}
           </CardContent>

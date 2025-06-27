@@ -43,7 +43,7 @@ serve(async (req) => {
           source: 'threatfox',
           description: item.comment || `ThreatFox IOC: ${item.threat_type}`,
           tags: item.tags || [],
-          source_url: 'https://threatfox.abuse.ch/'
+          source_url: item.id ? `https://threatfox.abuse.ch/ioc/${item.id}/` : `https://threatfox.abuse.ch/browse/malware/${item.malware_printable || 'unknown'}/`
         }));
       }
     }
@@ -61,7 +61,20 @@ serve(async (req) => {
         source: 'otx',
         description: 'IP address conducting automated vulnerability scanning',
         tags: ['scanning', 'reconnaissance'],
-        source_url: 'https://otx.alienvault.com/'
+        source_url: 'https://otx.alienvault.com/indicator/ip/203.147.89.12'
+      },
+      {
+        id: 'otx_' + Math.random().toString(),
+        indicator: 'malicious-domain.example.com',
+        type: 'domain',
+        threat_type: 'C2 Domain',
+        confidence: 85,
+        first_seen: new Date(Date.now() - 172800000).toISOString(),
+        last_seen: new Date().toISOString(),
+        source: 'otx',
+        description: 'Domain associated with command and control infrastructure',
+        tags: ['c2', 'malware'],
+        source_url: 'https://otx.alienvault.com/indicator/domain/malicious-domain.example.com'
       }
     ];
 

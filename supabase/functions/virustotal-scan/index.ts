@@ -64,34 +64,127 @@ serve(async (req) => {
 });
 
 async function scanUrl(url: string, apiKey: string) {
-  const response = await fetch('https://www.virustotal.com/vtapi/v2/url/report', {
+  // First submit URL for analysis (v3 API)
+  const submitResponse = await fetch('https://www.virustotal.com/api/v3/urls', {
     method: 'POST',
     headers: {
+      'x-apikey': apiKey,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: `apikey=${apiKey}&resource=${encodeURIComponent(url)}`,
+    body: `url=${encodeURIComponent(url)}`,
   });
 
-  const data = await response.json();
-  return formatScanResult(data, url);
+  if (!submitResponse.ok) {
+    throw new Error('Failed to submit URL for analysis');
+  }
+
+  const submitData = await submitResponse.json();
+  const analysisId = submitData.data.id;
+
+  // Get analysis results
+  const reportResponse = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+    headers: {
+      'x-apikey': apiKey,
+    },
+  });
+
+  const reportData = await reportResponse.json();
+  return formatScanResultV3(reportData, url);
 }
 
 async function scanHash(hash: string, apiKey: string) {
-  const response = await fetch(`https://www.virustotal.com/vtapi/v2/file/report?apikey=${apiKey}&resource=${hash}`);
+  const response = await fetch(`https://www.virustotal.com/api/v3/files/${hash}`, {
+    headers: {
+      'x-apikey': apiKey,
+    },
+  });
+  
   const data = await response.json();
-  return formatScanResult(data, hash);
+  return formatScanResultV3(data, hash);
 }
 
 async function scanIp(ip: string, apiKey: string) {
-  const response = await fetch(`https://www.virustotal.com/vtapi/v2/ip-address/report?apikey=${apiKey}&ip=${ip}`);
+  const response = await fetch(`https://www.virustotal.com/api/v3/ip_addresses/${ip}`, {
+    headers: {
+      'x-apikey': apiKey,
+    },
+  });
+  
   const data = await response.json();
-  return formatScanResult(data, ip);
+  return formatScanResultV3(data, ip);
 }
 
 async function scanDomain(domain: string, apiKey: string) {
-  const response = await fetch(`https://www.virustotal.com/vtapi/v2/domain/report?apikey=${apiKey}&domain=${domain}`);
+  const response = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
+    headers: {
+      'x-apikey': apiKey,
+    },
+  });
+  
   const data = await response.json();
-  return formatScanResult(data, domain);
+  return formatScanResultV3(data, domain);
+}
+
+function formatScanResultV3(data: any, input: string) {
+  console.log('VirusTotal v3 response:', data);
+
+  if (!data.data) {
+    return {
+      summary: 'No results found',
+      detectionRatio: '0/0',
+      verdict: 'unknown',
+      vendors: [],
+      rawData: data
+    };
+  }
+
+  const attributes = data.data.attributes;
+  if (!attributes) {
+    return {
+      summary: 'Analysis in progress',
+      detectionRatio: 'Scanning...',
+      verdict: 'scanning',
+      vendors: [],
+      rawData: data
+    };
+  }
+
+  const stats = attributes.last_analysis_stats || {};
+  const positives = stats.malicious || 0;
+  const total = (stats.malicious || 0) + (stats.clean || 0) + (stats.suspicious || 0) + (stats.undetected || 0);
+  const detectionRatio = `${positives}/${total}`;
+
+  let verdict = 'clean';
+  let summary = 'No threats detected';
+
+  if (positives > 0) {
+    if (positives > total * 0.1) {
+      verdict = 'malicious';
+      summary = 'Malicious content detected';
+    } else {
+      verdict = 'suspicious';
+      summary = 'Suspicious content detected';
+    }
+  }
+
+  const vendors: Array<{name: string, result: string, category: string}> = [];
+  if (attributes.last_analysis_results) {
+    for (const [vendorName, scanResult] of Object.entries(attributes.last_analysis_results as Record<string, any>)) {
+      vendors.push({
+        name: vendorName,
+        result: scanResult.result || 'Clean',
+        category: scanResult.category || 'antivirus'
+      });
+    }
+  }
+
+  return {
+    summary,
+    detectionRatio,
+    verdict,
+    vendors: vendors.slice(0, 10), // Limit to first 10 vendors for UI
+    rawData: data
+  };
 }
 
 function formatScanResult(data: any, input: string) {
@@ -134,7 +227,7 @@ function formatScanResult(data: any, input: string) {
     }
   }
 
-  const vendors = [];
+  const vendors: Array<{name: string, result: string, category: string}> = [];
   if (data.scans) {
     for (const [vendorName, scanResult] of Object.entries(data.scans as Record<string, any>)) {
       vendors.push({

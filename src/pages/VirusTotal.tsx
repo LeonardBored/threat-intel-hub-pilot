@@ -26,6 +26,15 @@ export default function VirusTotal() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
 
+  // Helper function to detect if input is likely a URL
+  const isLikelyURL = (str: string) => {
+    // Check if it looks like a domain/URL (contains dots, no spaces, not an IP, not a hash)
+    return str.includes('.') && 
+           !str.includes(' ') && 
+           !str.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) && // Not an IP
+           !str.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/); // Not a hash
+  };
+
   const handleScan = async () => {
     if (!input.trim()) {
       toast({
@@ -36,11 +45,19 @@ export default function VirusTotal() {
       return;
     }
 
+    let processedInput = input.trim();
+    
+    // Auto-add https:// for URLs that don't have a protocol
+    if (isLikelyURL(processedInput) && !processedInput.startsWith('http://') && !processedInput.startsWith('https://')) {
+      processedInput = 'https://' + processedInput;
+      setInput(processedInput); // Update the input field to show the full URL
+    }
+
     setLoading(true);
     
     try {
       const { data, error } = await supabase.functions.invoke('virustotal-scan', {
-        body: { input: input.trim() }
+        body: { input: processedInput }
       });
 
       if (error) {
@@ -66,7 +83,7 @@ export default function VirusTotal() {
       
       toast({
         title: "Scan Complete",
-        description: `Analysis finished for: ${input}`,
+        description: `Analysis finished for: ${processedInput}`,
       });
     } catch (error) {
       console.error('Scan error:', error);
@@ -147,7 +164,7 @@ export default function VirusTotal() {
             Malware Analysis
           </CardTitle>
           <CardDescription>
-            Enter a URL, IP address, domain, or file hash (MD5, SHA1, SHA256) to analyze
+            Enter a URL, IP address, domain, or file hash (MD5, SHA1, SHA256) to analyze. HTTPS prefix will be added automatically for URLs.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

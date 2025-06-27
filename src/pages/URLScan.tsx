@@ -39,20 +39,23 @@ export default function URLScan() {
       return;
     }
 
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    let processedUrl = url.trim();
+    
+    // Auto-add https:// if no protocol is specified
+    if (!processedUrl.startsWith('http://') && !processedUrl.startsWith('https://')) {
+      processedUrl = 'https://' + processedUrl;
+      setUrl(processedUrl); // Update the input field to show the full URL
       toast({
-        title: "Invalid URL",
-        description: "Please enter a valid URL starting with http:// or https://",
-        variant: "destructive"
+        title: "Protocol Added",
+        description: "Added https:// to the URL for security.",
       });
-      return;
     }
 
     setLoading(true);
     
     try {
       const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
-        body: { url: url.trim() }
+        body: { url: processedUrl }
       });
 
       if (error) {
@@ -78,7 +81,7 @@ export default function URLScan() {
       
       toast({
         title: "Scan Complete",
-        description: `URL analysis finished for: ${url}`,
+        description: `URL analysis finished for: ${processedUrl}`,
       });
     } catch (error) {
       console.error('Scan error:', error);
@@ -132,7 +135,7 @@ export default function URLScan() {
             Website Security Scan
           </CardTitle>
           <CardDescription>
-            Submit a URL for comprehensive security analysis and screenshot capture
+            Submit a URL for comprehensive security analysis and screenshot capture. HTTPS prefix will be added automatically if not specified.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -142,7 +145,7 @@ export default function URLScan() {
               <Input
                 id="url-input"
                 className="cyber-input flex-1"
-                placeholder="https://example.com"
+                placeholder="example.com or https://example.com"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !loading && handleScan()}

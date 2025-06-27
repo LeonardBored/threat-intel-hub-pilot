@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 };
 
 serve(async (req) => {
@@ -57,15 +58,28 @@ serve(async (req) => {
     const submitData = await submitResponse.json();
     console.log('URLScan submit response:', submitData);
 
-    // Wait a moment for the scan to process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Get scan results
     const uuid = submitData.uuid;
-    const resultResponse = await fetch(`https://urlscan.io/api/v1/result/${uuid}/`);
+    const maxAttempts = 20; // Max 20 attempts, with 5-second delay = 100 seconds total
+    const delayMs = 5000; // 5 seconds
 
-    if (!resultResponse.ok) {
-      // Scan might still be processing
+    let resultData: any;
+    let scanComplete = false;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(resolve => setTimeout(resolve, delayMs)); // Wait before polling
+      const resultResponse = await fetch(`https://urlscan.io/api/v1/result/${uuid}/`);
+
+      if (resultResponse.ok) {
+        resultData = await resultResponse.json();
+        if (resultData.task && resultData.task.url) { // Check if scan data is substantial
+          scanComplete = true;
+          break;
+        }
+      }
+      console.log(`Attempt ${i + 1}/${maxAttempts}: Scan still processing for UUID ${uuid}`);
+    }
+
+    if (!scanComplete) {
       return new Response(
         JSON.stringify({
           url: url,
@@ -79,27 +93,30 @@ serve(async (req) => {
             ips: 0,
             countries: []
           },
-          message: 'Scan in progress. Check the report URL for updates.'
+          message: 'Scan timed out. Check the report URL for updates or try again later.'
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const resultData = await resultResponse.json();
     console.log('URLScan result:', resultData);
 
     // Format the response
+    const screenshotUrl = resultData.task?.screenshotURL || 
+                         resultData.screenshotURL || 
+                         (resultData.task?.url ? `https://urlscan.io/screenshots/${uuid}.png` : null);
+    
     const formattedResult = {
       url: url,
       verdict: determineVerdict(resultData),
-      screenshotUrl: resultData.task?.screenshotURL || resultData.screenshotURL,
+      screenshotUrl: screenshotUrl,
       reportUrl: `https://urlscan.io/result/${uuid}/`,
       score: calculateRiskScore(resultData),
       analysis: {
-        requests: resultData.stats?.uniqIPs || 0,
-        domains: resultData.stats?.uniqCountries || 0,
+        requests: resultData.stats?.malicious || 0,
+        domains: resultData.stats?.uniqDomains || 0,
         ips: resultData.stats?.uniqIPs || 0,
-        countries: resultData.stats?.uniqCountries ? ['Multiple'] : []
+        countries: resultData.stats?.uniqCountries ? Array.from(new Set(resultData.lists?.countries || [])).slice(0, 3) : []
       }
     };
 

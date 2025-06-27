@@ -242,6 +242,20 @@ export default function ThreatIntel() {
                     </Badge>
                   ))}
                 </div>
+                <div className="mt-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent card's onClick from firing
+                      window.open(threat.source_url, '_blank');
+                    }}
+                    className="text-xs flex items-center gap-1"
+                  >
+                    View on {threat.source === 'threatfox' ? 'ThreatFox' : 'OTX'}
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
