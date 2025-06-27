@@ -234,14 +234,35 @@ function formatScanResultV3(data: any, input: string, type: string = 'unknown') 
     }
   }
 
-  // Sort vendors by threat level (malicious first, then suspicious, etc.)
-  vendors.sort((a, b) => {
+  // Filter vendors to show only meaningful results
+  // Priority: malicious, suspicious, clean/harmless first
+  const maliciousVendors = vendors.filter(v => v.category === 'malicious');
+  const suspiciousVendors = vendors.filter(v => v.category === 'suspicious');
+  const cleanVendors = vendors.filter(v => v.category === 'clean' || v.category === 'harmless');
+  const undetectedVendors = vendors.filter(v => v.category === 'undetected');
+  
+  let filteredVendors: Array<{name: string, result: string, category: string}> = [];
+  
+  // Show meaningful results first
+  filteredVendors = [
+    ...maliciousVendors,
+    ...suspiciousVendors,
+    ...cleanVendors.slice(0, 5) // Limit clean results to 5
+  ];
+  
+  // Only show undetected if no meaningful results exist
+  if (filteredVendors.length === 0) {
+    filteredVendors = undetectedVendors.slice(0, 10);
+  }
+
+  // Sort by category priority (malicious first, then suspicious, etc.)
+  filteredVendors.sort((a, b) => {
     const categoryOrder = { 
       'malicious': 0, 
       'suspicious': 1, 
-      'undetected': 2, 
-      'harmless': 3, 
-      'clean': 3,
+      'harmless': 2,
+      'clean': 2, 
+      'undetected': 3, 
       'timeout': 4, 
       'failure': 5 
     };
@@ -252,7 +273,7 @@ function formatScanResultV3(data: any, input: string, type: string = 'unknown') 
     summary,
     detectionRatio,
     verdict,
-    vendors: vendors.slice(0, 30), // Show more vendors for better insight
+    vendors: filteredVendors, // Use filtered vendors instead of all vendors
     stats: {
       malicious,
       suspicious,

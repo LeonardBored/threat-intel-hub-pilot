@@ -322,7 +322,10 @@ export default function VirusTotal() {
                     <CardHeader>
                       <CardTitle>Vendor Analysis Results</CardTitle>
                       <CardDescription>
-                        Detailed detection results from security vendors
+                        {result.vendors.length > 0 && result.vendors.every(v => v.category === 'undetected') 
+                          ? "No engines detected threats - showing sample of engines that analyzed this target"
+                          : "Detection results from security vendors (showing meaningful results only)"
+                        }
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -357,29 +360,48 @@ export default function VirusTotal() {
                           </div>
                         </div>
                       )}
-                      <div className="space-y-2">
-                        {result.vendors.map((vendor, index) => (
-                          <div 
-                            key={index}
-                            className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
-                          >
-                            <div className="font-medium">{vendor.name}</div>
-                            <div className="flex items-center gap-2">
-                              <Badge 
-                                variant="outline"
-                                className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
+                      {result.vendors.length === 0 && (
+                        <div className="text-center p-4 text-muted-foreground">
+                          <p>No vendor results available for this scan.</p>
+                        </div>
+                      )}
+                      {result.vendors.length > 0 && (
+                        <>
+                          <div className="space-y-2">
+                            {result.vendors.map((vendor, index) => (
+                              <div 
+                                key={index}
+                                className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
                               >
-                                {vendor.result || 'Clean'}
-                              </Badge>
-                              {vendor.category && vendor.category !== 'undetected' && (
-                                <span className="text-xs text-muted-foreground capitalize">
-                                  {vendor.category}
-                                </span>
-                              )}
-                            </div>
+                                <div className="font-medium">{vendor.name}</div>
+                                <div className="flex items-center gap-2">
+                                  <Badge 
+                                    variant="outline"
+                                    className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
+                                  >
+                                    {vendor.result || 'Clean'}
+                                  </Badge>
+                                  {vendor.category && vendor.category !== 'undetected' && (
+                                    <span className="text-xs text-muted-foreground capitalize">
+                                      {vendor.category}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                          {result.vendors.every(v => v.category === 'undetected') && (
+                            <div className="mt-3 p-2 bg-muted/10 rounded text-xs text-muted-foreground">
+                              💡 Showing sample engines that analyzed this target. All engines report no threats detected.
+                            </div>
+                          )}
+                          {result.vendors.some(v => v.category !== 'undetected') && (
+                            <div className="mt-3 p-2 bg-muted/10 rounded text-xs text-muted-foreground">
+                              💡 Only showing engines with meaningful results (malicious, suspicious, clean). View full report for all engines.
+                            </div>
+                          )}
+                        </>
+                      )}
                     </CardContent>
                   </Card>
                 )}
