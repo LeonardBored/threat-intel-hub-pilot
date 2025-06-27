@@ -102,9 +102,28 @@ serve(async (req) => {
     console.log('URLScan result:', resultData);
 
     // Format the response
-    const screenshotUrl = resultData.task?.screenshotURL || 
-                         resultData.screenshotURL || 
-                         (resultData.task?.url ? `https://urlscan.io/screenshots/${uuid}.png` : null);
+    let screenshotUrl = resultData.task?.screenshotURL || 
+                       resultData.screenshotURL || 
+                       (resultData.task?.url ? `https://urlscan.io/screenshots/${uuid}.png` : null);
+    
+    // If we have a screenshot URL, try to verify it's accessible
+    if (screenshotUrl) {
+      try {
+        const screenshotResponse = await fetch(screenshotUrl, { 
+          method: 'HEAD',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        if (!screenshotResponse.ok) {
+          console.log('Screenshot URL not accessible, using fallback');
+          screenshotUrl = null;
+        }
+      } catch (error) {
+        console.log('Error checking screenshot URL:', error);
+        // Keep the URL, let the frontend handle the error
+      }
+    }
     
     const formattedResult = {
       url: url,

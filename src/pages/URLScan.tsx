@@ -270,9 +270,15 @@ export default function URLScan() {
                             src={result.screenshotUrl}
                             alt="Website screenshot"
                             className="w-full h-64 object-cover rounded-md border border-primary/20"
+                            crossOrigin="anonymous"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
+                              console.log('Screenshot failed to load, falling back to placeholder');
                               target.src = '/placeholder.svg';
+                              target.onerror = null; // Prevent infinite loop
+                            }}
+                            onLoad={() => {
+                              console.log('Screenshot loaded successfully');
                             }}
                           />
                         ) : (
@@ -288,9 +294,26 @@ export default function URLScan() {
                         <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
                           URLScan.io capture
                         </div>
+                        {result.screenshotUrl && (
+                          <div className="absolute top-2 right-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="text-xs"
+                              onClick={() => window.open(result.screenshotUrl, '_blank')}
+                            >
+                              Open in New Tab
+                            </Button>
+                          </div>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
                         Screenshot captured during automated browsing session
+                        {result.screenshotUrl && (
+                          <span className="block mt-1 text-green-400">
+                            ✓ Screenshot available - click "Open in New Tab" if not displaying properly
+                          </span>
+                        )}
                       </p>
                     </CardContent>
                   </Card>
@@ -310,8 +333,12 @@ export default function URLScan() {
             This scanner is now connected to the real URLScan.io API and will provide live scan results 
             with real screenshots and comprehensive analysis data.
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground mb-2">
             Your API key is securely stored in Supabase and accessed through encrypted edge functions.
+          </p>
+          <p className="text-xs text-yellow-400">
+            Note: Screenshots are loaded from URLScan.io's CDN. If images don't display due to CORS restrictions, 
+            use the "Open in New Tab" button to view them directly.
           </p>
         </CardContent>
       </Card>
