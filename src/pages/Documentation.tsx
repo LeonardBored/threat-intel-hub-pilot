@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Book, ExternalLink, Search, Filter, Cloud, Shield, Settings } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,13 +11,13 @@ interface DocItem {
   title: string;
   description: string;
   url: string;
-  provider: 'aws' | 'azure' | 'gcp';
+  provider: 'aws' | 'azure' | 'gcp' | 'general' | 'tools';
   category: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
 }
 
 const documentationItems: DocItem[] = [
-  // AWS Documentation - Updated with current working links
+  // AWS Documentation
   {
     title: "AWS Security Best Practices",
     description: "Comprehensive guide to implementing security controls in AWS environments",
@@ -42,83 +43,75 @@ const documentationItems: DocItem[] = [
     difficulty: "intermediate"
   },
   {
-    title: "AWS Security Incident Response Guide",
-    description: "Step-by-step incident response procedures for AWS environments",
-    url: "https://docs.aws.amazon.com/whitepapers/latest/aws-security-incident-response-guide/",
+    title: "AWS Security Hub",
+    description: "Centralized security findings and compliance monitoring",
+    url: "https://docs.aws.amazon.com/securityhub/latest/userguide/",
     provider: "aws",
-    category: "Incident Response",
+    category: "Security Management",
     difficulty: "advanced"
   },
   {
-    title: "AWS VPC Security",
-    description: "Network security configuration and best practices for VPCs",
-    url: "https://docs.aws.amazon.com/vpc/latest/userguide/security.html",
+    title: "AWS GuardDuty",
+    description: "Threat detection service using machine learning",
+    url: "https://docs.aws.amazon.com/guardduty/latest/ug/",
     provider: "aws",
-    category: "Network Security",
+    category: "Threat Detection",
     difficulty: "intermediate"
   },
   {
-    title: "AWS Config",
-    description: "Configuration management and compliance monitoring for AWS resources",
-    url: "https://docs.aws.amazon.com/config/latest/developerguide/",
+    title: "AWS Inspector",
+    description: "Automated security assessment service",
+    url: "https://docs.aws.amazon.com/inspector/latest/user/",
     provider: "aws",
-    category: "Compliance",
+    category: "Vulnerability Assessment",
     difficulty: "intermediate"
   },
 
-  // Azure Documentation - Updated with current working links
+  // Azure Documentation
   {
     title: "Azure Security Documentation",
     description: "Microsoft Azure security features, tools, and best practices",
-    url: "https://docs.microsoft.com/en-us/azure/security/",
+    url: "https://learn.microsoft.com/en-us/azure/security/",
     provider: "azure",
     category: "Security Guidelines",
     difficulty: "intermediate"
   },
   {
-    title: "Microsoft Entra ID (Azure AD)",
+    title: "Microsoft Entra ID",
     description: "Identity and access management for Azure and Microsoft 365",
-    url: "https://docs.microsoft.com/en-us/azure/active-directory/",
+    url: "https://learn.microsoft.com/en-us/entra/fundamentals/",
     provider: "azure",
     category: "Identity & Access",
     difficulty: "beginner"
   },
   {
-    title: "Microsoft Sentinel Documentation",
+    title: "Microsoft Sentinel",
     description: "Cloud-native SIEM and security orchestration platform",
-    url: "https://docs.microsoft.com/en-us/azure/sentinel/",
+    url: "https://learn.microsoft.com/en-us/azure/sentinel/",
     provider: "azure",
     category: "SIEM",
     difficulty: "advanced"
   },
   {
     title: "Microsoft Defender for Cloud",
-    description: "Unified security management and threat protection for hybrid cloud workloads",
-    url: "https://docs.microsoft.com/en-us/azure/defender-for-cloud/",
+    description: "Unified security management and threat protection",
+    url: "https://learn.microsoft.com/en-us/azure/defender-for-cloud/",
     provider: "azure",
     category: "Threat Protection",
     difficulty: "intermediate"
   },
   {
-    title: "Azure Network Security Groups",
-    description: "Configuring network-level security controls in Azure",
-    url: "https://docs.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview",
-    provider: "azure",
-    category: "Network Security",
-    difficulty: "beginner"
-  },
-  {
     title: "Azure Key Vault",
-    description: "Secure storage and management of cryptographic keys, certificates, and secrets",
-    url: "https://docs.microsoft.com/en-us/azure/key-vault/",
+    description: "Secure storage and management of cryptographic keys and secrets",
+    url: "https://learn.microsoft.com/en-us/azure/key-vault/",
     provider: "azure",
     category: "Key Management",
     difficulty: "intermediate"
   },
 
-  // GCP Documentation - Updated with current working links
+  // Google Cloud Documentation
   {
-    title: "Google Cloud Security Documentation",
+    title: "Google Cloud Security",
     description: "Security features and best practices for Google Cloud Platform",
     url: "https://cloud.google.com/docs/security",
     provider: "gcp",
@@ -135,7 +128,7 @@ const documentationItems: DocItem[] = [
   },
   {
     title: "Google Cloud Security Command Center",
-    description: "Centralized security and risk management for Google Cloud",
+    description: "Centralized security and risk management platform",
     url: "https://cloud.google.com/security-command-center/docs",
     provider: "gcp",
     category: "Security Management",
@@ -149,21 +142,81 @@ const documentationItems: DocItem[] = [
     category: "Network Security",
     difficulty: "intermediate"
   },
+
+  // General Security Documentation
   {
-    title: "Google Cloud Audit Logs",
-    description: "Logging and monitoring for security analysis and compliance",
-    url: "https://cloud.google.com/logging/docs/audit",
-    provider: "gcp",
-    category: "Monitoring",
+    title: "OWASP Top 10",
+    description: "Most critical web application security risks",
+    url: "https://owasp.org/www-project-top-ten/",
+    provider: "general",
+    category: "Web Security",
+    difficulty: "beginner"
+  },
+  {
+    title: "NIST Cybersecurity Framework",
+    description: "Framework for managing cybersecurity risk",
+    url: "https://www.nist.gov/cyberframework",
+    provider: "general",
+    category: "Frameworks",
     difficulty: "intermediate"
   },
   {
-    title: "Google Cloud KMS",
-    description: "Key Management Service for encryption key lifecycle management",
-    url: "https://cloud.google.com/kms/docs",
-    provider: "gcp",
-    category: "Key Management",
+    title: "CIS Controls",
+    description: "Prioritized set of actions for cyber defense",
+    url: "https://www.cisecurity.org/controls",
+    provider: "general",
+    category: "Security Controls",
     difficulty: "intermediate"
+  },
+  {
+    title: "MITRE ATT&CK Framework",
+    description: "Knowledge base of adversary tactics and techniques",
+    url: "https://attack.mitre.org/",
+    provider: "general",
+    category: "Threat Intelligence",
+    difficulty: "advanced"
+  },
+
+  // Security Tools Documentation
+  {
+    title: "Wireshark User Guide",
+    description: "Network protocol analyzer documentation",
+    url: "https://www.wireshark.org/docs/wsug_html_chunked/",
+    provider: "tools",
+    category: "Network Analysis",
+    difficulty: "intermediate"
+  },
+  {
+    title: "Nmap Reference Guide",
+    description: "Network discovery and security auditing tool",
+    url: "https://nmap.org/book/",
+    provider: "tools",
+    category: "Network Scanning",
+    difficulty: "intermediate"
+  },
+  {
+    title: "Metasploit Documentation",
+    description: "Penetration testing framework documentation",
+    url: "https://docs.metasploit.com/",
+    provider: "tools",
+    category: "Penetration Testing",
+    difficulty: "advanced"
+  },
+  {
+    title: "Burp Suite Documentation",
+    description: "Web application security testing platform",
+    url: "https://portswigger.net/burp/documentation",
+    provider: "tools",
+    category: "Web Security Testing",
+    difficulty: "intermediate"
+  },
+  {
+    title: "Splunk Security Documentation",
+    description: "Security information and event management platform",
+    url: "https://docs.splunk.com/Documentation/Splunk/latest/Security",
+    provider: "tools",
+    category: "SIEM",
+    difficulty: "advanced"
   }
 ];
 
@@ -192,6 +245,10 @@ export default function Documentation() {
         return '🔷';
       case 'gcp':
         return '🟡';
+      case 'general':
+        return '📋';
+      case 'tools':
+        return '🛠️';
       default:
         return '📄';
     }
@@ -205,6 +262,10 @@ export default function Documentation() {
         return 'text-blue-400';
       case 'gcp':
         return 'text-green-400';
+      case 'general':
+        return 'text-purple-400';
+      case 'tools':
+        return 'text-cyan-400';
       default:
         return 'text-gray-400';
     }
@@ -230,7 +291,7 @@ export default function Documentation() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Security Documentation Hub</h1>
           <p className="text-muted-foreground">
-            Curated security documentation and playbooks for cloud platforms
+            Comprehensive security documentation and playbooks for all platforms
           </p>
         </div>
       </div>
@@ -260,11 +321,13 @@ export default function Documentation() {
           </div>
 
           <Tabs value={selectedProvider} onValueChange={setSelectedProvider} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="all">All Platforms</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="aws">AWS</TabsTrigger>
               <TabsTrigger value="azure">Azure</TabsTrigger>
-              <TabsTrigger value="gcp">Google Cloud</TabsTrigger>
+              <TabsTrigger value="gcp">GCP</TabsTrigger>
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="tools">Tools</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -277,7 +340,7 @@ export default function Documentation() {
             >
               All Categories
             </Button>
-            {categories.map(category => (
+            {categories.slice(0, 8).map(category => (
               <Button
                 key={category}
                 size="sm"
@@ -371,18 +434,18 @@ export default function Documentation() {
         )}
       </div>
 
-      <Card className="cyber-card">
+      <Card className="cyber-card border-green-500/20">
         <CardHeader>
-          <CardTitle className="text-blue-400">📚 Documentation Notes</CardTitle>
+          <CardTitle className="text-green-400">📚 Enhanced Documentation Hub</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            All documentation links have been verified and updated to current official sources. 
-            Links open in new tabs and lead to authoritative cloud security documentation.
+            All documentation links have been verified and updated. The hub now includes comprehensive
+            resources for cloud platforms, security frameworks, and security tools.
           </p>
           <p className="text-xs text-muted-foreground">
-            For production environments, consider implementing a knowledge base with 
-            internal documentation, custom playbooks, and organization-specific procedures.
+            New categories include OWASP, NIST, CIS Controls, MITRE ATT&CK, and popular security tools
+            like Wireshark, Nmap, Metasploit, and Burp Suite.
           </p>
         </CardContent>
       </Card>

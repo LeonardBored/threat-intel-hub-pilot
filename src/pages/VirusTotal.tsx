@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,6 +110,24 @@ export default function VirusTotal() {
     }
   };
 
+  const getVirusTotalReportUrl = (inputValue: string) => {
+    // Generate the appropriate VirusTotal report URL based on input type
+    if (inputValue.startsWith('http://') || inputValue.startsWith('https://')) {
+      // URL scan
+      const encodedUrl = btoa(inputValue).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      return `https://www.virustotal.com/gui/url/${encodedUrl}`;
+    } else if (inputValue.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/)) {
+      // Hash scan
+      return `https://www.virustotal.com/gui/file/${inputValue}`;
+    } else if (inputValue.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
+      // IP scan
+      return `https://www.virustotal.com/gui/ip-address/${inputValue}`;
+    } else {
+      // Domain scan
+      return `https://www.virustotal.com/gui/domain/${inputValue}`;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -201,17 +219,27 @@ export default function VirusTotal() {
                       <div className="text-sm font-mono break-all text-primary">
                         {input}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 mt-1"
-                        onClick={() => {
-                          navigator.clipboard.writeText(input);
-                          toast({ title: "Copied to clipboard" });
-                        }}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2"
+                          onClick={() => {
+                            navigator.clipboard.writeText(input);
+                            toast({ title: "Copied to clipboard" });
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2"
+                          onClick={() => window.open(getVirusTotalReportUrl(input), '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -246,6 +274,27 @@ export default function VirusTotal() {
                     </CardContent>
                   </Card>
                 )}
+
+                <Card className="cyber-card">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-primary">View Full VirusTotal Report</div>
+                        <p className="text-sm text-muted-foreground">
+                          Access detailed analysis and additional information on VirusTotal's platform
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="cyber-button"
+                        onClick={() => window.open(getVirusTotalReportUrl(input), '_blank')}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Report
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {result.verdict === 'unknown' && (
                   <Card className="cyber-card border-yellow-500/20">

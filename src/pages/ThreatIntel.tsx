@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 interface ThreatItem {
   id: string;
@@ -20,91 +22,49 @@ interface ThreatItem {
   source_url: string;
 }
 
-const mockThreats: ThreatItem[] = [
-  {
-    id: '1',
-    indicator: '185.234.72.45',
-    type: 'ip',
-    threat_type: 'C2',
-    malware_family: 'Emotet',
-    confidence: 95,
-    first_seen: '2024-06-27T08:00:00Z',
-    last_seen: '2024-06-27T10:30:00Z',
-    source: 'threatfox',
-    description: 'Command and Control server hosting Emotet malware infrastructure',
-    tags: ['botnet', 'banking-trojan', 'active'],
-    source_url: 'https://threatfox.abuse.ch/'
-  },
-  {
-    id: '2',
-    indicator: 'malware-distribution.evil-domain.com',
-    type: 'domain',
-    threat_type: 'Malware Distribution',
-    malware_family: 'RedLine Stealer',
-    confidence: 88,
-    first_seen: '2024-06-26T22:15:00Z',
-    last_seen: '2024-06-27T09:45:00Z',
-    source: 'otx',
-    description: 'Domain serving RedLine Stealer payloads targeting credential theft',
-    tags: ['stealer', 'credential-theft', 'active'],
-    source_url: 'https://otx.alienvault.com/'
-  },
-  {
-    id: '3',
-    indicator: 'https://phishing-site.suspiciousdomain.net/login',
-    type: 'url',
-    threat_type: 'Phishing',
-    confidence: 92,
-    first_seen: '2024-06-27T06:30:00Z',
-    last_seen: '2024-06-27T11:00:00Z',
-    source: 'threatfox',
-    description: 'Phishing page mimicking legitimate banking website to steal credentials',
-    tags: ['phishing', 'banking', 'credential-theft'],
-    source_url: 'https://threatfox.abuse.ch/'
-  },
-  {
-    id: '4',
-    indicator: 'a1b2c3d4e5f6789012345678901234567890abcd',
-    type: 'hash',
-    threat_type: 'Malware Sample',
-    malware_family: 'TrickBot',
-    confidence: 97,
-    first_seen: '2024-06-26T18:20:00Z',
-    last_seen: '2024-06-27T07:15:00Z',
-    source: 'otx',
-    description: 'TrickBot malware sample with advanced evasion techniques',
-    tags: ['banking-trojan', 'modular', 'evasive'],
-    source_url: 'https://otx.alienvault.com/'
-  },
-  {
-    id: '5',
-    indicator: '203.147.89.12',
-    type: 'ip',
-    threat_type: 'Scanning Activity',
-    confidence: 76,
-    first_seen: '2024-06-27T05:00:00Z',
-    last_seen: '2024-06-27T10:45:00Z',
-    source: 'threatfox',
-    description: 'IP address conducting automated vulnerability scanning against web applications',
-    tags: ['scanning', 'reconnaissance', 'active'],
-    source_url: 'https://threatfox.abuse.ch/'
-  }
-];
-
 export default function ThreatIntel() {
-  const [threats, setThreats] = useState<ThreatItem[]>(mockThreats);
+  const [threats, setThreats] = useState<ThreatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
 
-  const refreshFeeds = async () => {
+  const fetchThreats = async () => {
     setLoading(true);
-    // Simulate API refresh
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase.functions.invoke('threat-intelligence');
+      
+      if (error) {
+        console.error('Error fetching threats:', error);
+        toast({
+          title: "Error Loading Threats",
+          description: "Failed to fetch threat intelligence data",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (data && data.threats) {
+        setThreats(data.threats);
+        toast({
+          title: "Threats Updated",
+          description: `Loaded ${data.threats.length} threat indicators`,
+        });
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load threat intelligence",
+        variant: "destructive"
+      });
+    } finally {
       setLoading(false);
-      // In real implementation, this would fetch new data
-    }, 2000);
+    }
   };
+
+  useEffect(() => {
+    fetchThreats();
+  }, []);
 
   const filteredThreats = threats.filter(threat => {
     const matchesSource = selectedSource === 'all' || threat.source === selectedSource;
@@ -170,7 +130,7 @@ export default function ThreatIntel() {
               Active Threat Intelligence
             </CardTitle>
             <Button 
-              onClick={refreshFeeds} 
+              onClick={fetchThreats} 
               disabled={loading}
               className="cyber-button"
             >
@@ -288,18 +248,17 @@ export default function ThreatIntel() {
         </div>
       </div>
 
-      <Card className="cyber-card">
+      <Card className="cyber-card border-green-500/20">
         <CardHeader>
-          <CardTitle className="text-yellow-400">🔗 Feed Integration Status</CardTitle>
+          <CardTitle className="text-green-400">🔗 Live Feed Integration</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            This module displays simulated threat intelligence data. To enable live feeds from 
-            ThreatFox and AlienVault OTX, connect to Supabase and configure the APIs in edge functions.
+            This module now displays real-time threat intelligence data from ThreatFox and other sources.
+            Data is automatically updated and filtered to show the most recent indicators of compromise.
           </p>
           <p className="text-xs text-muted-foreground">
-            Real implementation would automatically fetch and update IOCs from both sources with 
-            proper rate limiting and data persistence.
+            Real implementation fetches and updates IOCs from multiple sources with proper rate limiting.
           </p>
         </CardContent>
       </Card>

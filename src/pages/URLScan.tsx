@@ -1,17 +1,18 @@
 
 import { useState } from 'react';
-import { Search, ExternalLink, Camera, Shield, Copy } from 'lucide-react';
+import { Search, ExternalLink, Camera, Shield, Copy, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface URLScanResult {
   url: string;
-  verdict: 'safe' | 'malicious' | 'suspicious';
-  screenshotUrl: string;
+  verdict: 'safe' | 'malicious' | 'suspicious' | 'scanning';
+  screenshotUrl: string | null;
   reportUrl: string;
   score: number;
   analysis: {
@@ -20,6 +21,7 @@ interface URLScanResult {
     ips: number;
     countries: string[];
   };
+  message?: string;
 }
 
 export default function URLScan() {
@@ -48,30 +50,46 @@ export default function URLScan() {
 
     setLoading(true);
     
-    // Simulate API call with mock data
-    setTimeout(() => {
-      const mockResult: URLScanResult = {
-        url: url,
-        verdict: url.includes('malicious') ? 'malicious' : 'safe',
-        screenshotUrl: '/placeholder.svg',
-        reportUrl: `https://urlscan.io/result/mock-id-${Date.now()}`,
-        score: url.includes('malicious') ? 85 : 15,
-        analysis: {
-          requests: 24,
-          domains: 3,
-          ips: 2,
-          countries: ['US', 'GB']
-        }
-      };
-      
-      setResult(mockResult);
-      setLoading(false);
+    try {
+      const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
+        body: { url: url.trim() }
+      });
+
+      if (error) {
+        console.error('Supabase function error:', error);
+        toast({
+          title: "Scan Failed",
+          description: error.message || "Failed to scan the URL. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (data.error) {
+        toast({
+          title: "Scan Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setResult(data);
       
       toast({
         title: "Scan Complete",
         description: `URL analysis finished for: ${url}`,
       });
-    }, 3000);
+    } catch (error) {
+      console.error('Scan error:', error);
+      toast({
+        title: "Scan Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getVerdictColor = (verdict: string) => {
@@ -82,6 +100,8 @@ export default function URLScan() {
         return 'text-red-400';
       case 'suspicious':
         return 'text-yellow-400';
+      case 'scanning':
+        return 'text-blue-400';
       default:
         return 'text-gray-400';
     }
@@ -125,7 +145,8 @@ export default function URLScan() {
                 placeholder="https://example.com"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleScan()}
+                disabled={loading}
               />
               <Button 
                 onClick={handleScan} 
@@ -133,7 +154,8 @@ export default function URLScan() {
                 className="cyber-button min-w-[100px]"
               >
                 {loading ? (
-                  <div className="scan-indicator w-full h-full flex items-center justify-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Analyzing...
                   </div>
                 ) : (
@@ -186,8 +208,13 @@ export default function URLScan() {
                         </div>
                         <div className="flex justify-between items-center">
                           <span>Countries:</span>
-                          <span className="text-primary">{result.analysis.countries.join(', ')}</span>
+                          <span className="text-primary">{result.analysis.countries.join(', ') || 'N/A'}</span>
                         </div>
+                        {result.message && (
+                          <div className="text-sm text-yellow-400 mt-2">
+                            {result.message}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 
@@ -235,17 +262,32 @@ export default function URLScan() {
                     </CardHeader>
                     <CardContent>
                       <div className="relative">
-                        <img
-                          src={result.screenshotUrl}
-                          alt="Website screenshot"
-                          className="w-full h-64 object-cover rounded-md border border-primary/20"
-                        />
+                        {result.screenshotUrl ? (
+                          <img
+                            src={result.screenshotUrl}
+                            alt="Website screenshot"
+                            className="w-full h-64 object-cover rounded-md border border-primary/20"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder.svg';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-64 bg-muted/40 rounded-md border border-primary/20 flex items-center justify-center">
+                            <div className="text-center">
+                              <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                              <p className="text-sm text-muted-foreground">
+                                {result.verdict === 'scanning' ? 'Screenshot processing...' : 'Screenshot not available'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                         <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                          Screenshot captured
+                          URLScan.io capture
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Screenshot taken during automated browsing session
+                        Screenshot captured during automated browsing session
                       </p>
                     </CardContent>
                   </Card>
@@ -256,18 +298,17 @@ export default function URLScan() {
         </CardContent>
       </Card>
 
-      <Card className="cyber-card">
+      <Card className="cyber-card border-green-500/20">
         <CardHeader>
-          <CardTitle className="text-yellow-400">⚠ API Integration Required</CardTitle>
+          <CardTitle className="text-green-400">✅ Live URLScan.io Integration</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            To enable live URLScan.io analysis, connect this platform to Supabase 
-            and configure your URLScan.io API key in the backend.
+            This scanner is now connected to the real URLScan.io API and will provide live scan results 
+            with real screenshots and comprehensive analysis data.
           </p>
           <p className="text-xs text-muted-foreground">
-            The interface above shows simulated results. Real integration requires proper API key management 
-            and backend processing for security compliance.
+            Your API key is securely stored in Supabase and accessed through encrypted edge functions.
           </p>
         </CardContent>
       </Card>
