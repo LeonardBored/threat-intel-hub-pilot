@@ -12,12 +12,22 @@ import { supabase } from '@/integrations/supabase/client';
 interface ScanResult {
   summary: string;
   detectionRatio: string;
-  verdict: 'clean' | 'malicious' | 'suspicious' | 'unknown' | 'scanning';
+  verdict: 'clean' | 'malicious' | 'suspicious' | 'unknown' | 'scanning' | 'undetected';
   vendors: Array<{
     name: string;
     result: string;
     category: string;
   }>;
+  stats?: {
+    malicious: number;
+    suspicious: number;
+    clean: number;
+    undetected: number;
+    timeout: number;
+    failure: number;
+    total: number;
+  };
+  virusTotalUrl?: string;
   rawData?: any;
 }
 
@@ -97,9 +107,30 @@ export default function VirusTotal() {
     }
   };
 
-  // Helper function to get vendor result color
-  const getVendorResultColor = (result: string) => {
-    if (!result || result === 'Clean' || result === 'Undetected') {
+  // Helper function to get vendor result color based on VirusTotal categories
+  const getVendorResultColor = (result: string, category?: string) => {
+    // Use category if available (more accurate)
+    if (category) {
+      switch (category.toLowerCase()) {
+        case 'malicious':
+          return 'text-red-400 bg-red-900/20';
+        case 'suspicious':
+          return 'text-yellow-400 bg-yellow-900/20';
+        case 'harmless':
+        case 'clean':
+          return 'text-green-400 bg-green-900/20';
+        case 'undetected':
+          return 'text-gray-400 bg-gray-900/20';
+        case 'timeout':
+        case 'failure':
+          return 'text-orange-400 bg-orange-900/20';
+        default:
+          return 'text-gray-400 bg-gray-900/20';
+      }
+    }
+    
+    // Fallback to result-based detection
+    if (!result || result === 'Clean' || result === 'Undetected' || result === 'null') {
       return 'text-green-400 bg-green-900/20';
     }
     if (result.toLowerCase().includes('malicious') || 
@@ -107,15 +138,23 @@ export default function VirusTotal() {
         result.toLowerCase().includes('virus') || 
         result.toLowerCase().includes('malware') ||
         result.toLowerCase().includes('phishing') ||
-        result.toLowerCase().includes('suspicious')) {
+        result.toLowerCase().includes('backdoor') ||
+        result.toLowerCase().includes('ransomware')) {
       return 'text-red-400 bg-red-900/20';
     }
-    return 'text-gray-400 bg-gray-900/20'; // Unrated/Unknown
+    if (result.toLowerCase().includes('suspicious') ||
+        result.toLowerCase().includes('potentially') ||
+        result.toLowerCase().includes('pup') ||
+        result.toLowerCase().includes('adware')) {
+      return 'text-yellow-400 bg-yellow-900/20';
+    }
+    return 'text-gray-400 bg-gray-900/20';
   };
 
   const getVerdictIcon = (verdict: string) => {
     switch (verdict) {
       case 'clean':
+      case 'undetected':
         return <CheckCircle className="h-5 w-5 text-green-400" />;
       case 'malicious':
         return <XCircle className="h-5 w-5 text-red-400" />;
@@ -131,6 +170,7 @@ export default function VirusTotal() {
   const getVerdictColor = (verdict: string) => {
     switch (verdict) {
       case 'clean':
+      case 'undetected':
         return 'text-green-400';
       case 'malicious':
         return 'text-red-400';
@@ -286,6 +326,37 @@ export default function VirusTotal() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
+                      {result.stats && (
+                        <div className="mb-4 p-3 bg-muted/10 rounded-md">
+                          <div className="text-sm font-medium mb-2">Detection Statistics</div>
+                          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                            <div className="text-center">
+                              <div className="font-bold text-red-400">{result.stats.malicious}</div>
+                              <div className="text-muted-foreground">Malicious</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-yellow-400">{result.stats.suspicious}</div>
+                              <div className="text-muted-foreground">Suspicious</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-green-400">{result.stats.clean}</div>
+                              <div className="text-muted-foreground">Clean</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-gray-400">{result.stats.undetected}</div>
+                              <div className="text-muted-foreground">Undetected</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-orange-400">{result.stats.timeout}</div>
+                              <div className="text-muted-foreground">Timeout</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-red-300">{result.stats.failure}</div>
+                              <div className="text-muted-foreground">Failure</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         {result.vendors.map((vendor, index) => (
                           <div 
@@ -296,10 +367,15 @@ export default function VirusTotal() {
                             <div className="flex items-center gap-2">
                               <Badge 
                                 variant="outline"
-                                className={`font-mono ${getVendorResultColor(vendor.result)}`}
+                                className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
                               >
                                 {vendor.result || 'Clean'}
                               </Badge>
+                              {vendor.category && vendor.category !== 'undetected' && (
+                                <span className="text-xs text-muted-foreground capitalize">
+                                  {vendor.category}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -320,7 +396,7 @@ export default function VirusTotal() {
                       <Button
                         variant="outline"
                         className="cyber-button"
-                        onClick={() => window.open(getVirusTotalReportUrl(input), '_blank')}
+                        onClick={() => window.open(result.virusTotalUrl || getVirusTotalReportUrl(input), '_blank')}
                       >
                         <ExternalLink className="h-4 w-4 mr-2" />
                         Open Report
