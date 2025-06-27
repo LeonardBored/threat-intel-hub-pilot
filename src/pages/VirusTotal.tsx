@@ -89,16 +89,6 @@ export default function VirusTotal() {
         return;
       }
 
-      // Handle the case where we get an error response but it's structured differently
-      if (!data.summary && !data.vendors) {
-        toast({
-          title: "Scan Failed",
-          description: "Unexpected response format. Please try again.",
-          variant: "destructive"
-        });
-        return;
-      }
-
       setResult(data);
       
       toast({
