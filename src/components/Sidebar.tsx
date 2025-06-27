@@ -25,12 +25,13 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
+  const collapsed = state === 'collapsed';
 
   return (
     <Sidebar
       className={`${collapsed ? 'w-14' : 'w-64'} bg-sidebar border-r border-sidebar-border`}
-      collapsible
+      collapsible="offcanvas"
     >
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
