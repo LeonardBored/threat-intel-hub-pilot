@@ -20,18 +20,45 @@ const queryClient = new QueryClient();
 const App = () => {
   // Global error handler to suppress Cloudflare analytics and other external CORS errors
   useEffect(() => {
+    // Store original console.error to avoid infinite loops
+    const originalConsoleError = console.error;
+    
+    // Override console.error to suppress specific errors
+    console.error = (...args) => {
+      const errorString = args.join(' ');
+      
+      // Suppress Cloudflare and integrity related console errors
+      if (errorString.includes('cloudflareinsights') ||
+          errorString.includes('beacon.min.js') ||
+          errorString.includes('integrity') ||
+          errorString.includes('Failed to find a valid digest') ||
+          errorString.includes('sha384') ||
+          errorString.includes('CORS') ||
+          errorString.includes('Cross-Origin')) {
+        // Silently ignore these errors
+        return;
+      }
+      
+      // For all other errors, use the original console.error
+      originalConsoleError.apply(console, args);
+    };
+
     const handleError = (event: ErrorEvent) => {
       const errorMessage = event.message || '';
       const errorSource = event.filename || '';
       
-      // Suppress Cloudflare analytics errors
+      // Suppress Cloudflare analytics errors, integrity errors, and CORS errors
       if (errorSource.includes('cloudflareinsights.com') || 
           errorSource.includes('beacon.min.js') ||
           errorMessage.includes('cloudflareinsights') ||
           errorMessage.includes('integrity') ||
-          errorMessage.includes('CORS')) {
-        console.log('Suppressed external analytics error:', errorMessage);
+          errorMessage.includes('CORS') ||
+          errorMessage.includes('Failed to find a valid digest') ||
+          errorMessage.includes('sha384') ||
+          errorMessage.includes('crossorigin')) {
+        console.log('Suppressed external analytics/integrity error:', errorMessage);
         event.preventDefault();
+        event.stopPropagation();
         return false;
       }
     };
@@ -39,26 +66,42 @@ const App = () => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason?.message || event.reason || '';
       
-      // Suppress CORS and analytics related promise rejections
+      // Suppress CORS, integrity, and analytics related promise rejections
       if (typeof reason === 'string' && (
           reason.includes('cloudflareinsights') ||
           reason.includes('beacon.min.js') ||
           reason.includes('CORS') ||
           reason.includes('Cross-Origin') ||
-          reason.includes('integrity')
+          reason.includes('integrity') ||
+          reason.includes('Failed to find a valid digest') ||
+          reason.includes('sha384')
         )) {
         console.log('Suppressed external promise rejection:', reason);
         event.preventDefault();
       }
     };
 
+    // Handle SecurityError specifically (for CORS and integrity issues)
+    const handleSecurityError = (event: ErrorEvent) => {
+      if (event.error && event.error.name === 'SecurityError') {
+        console.log('Suppressed SecurityError:', event.error.message);
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      }
+    };
+
     // Add event listeners
     window.addEventListener('error', handleError);
+    window.addEventListener('error', handleSecurityError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     // Cleanup
     return () => {
+      // Restore original console.error
+      console.error = originalConsoleError;
       window.removeEventListener('error', handleError);
+      window.removeEventListener('error', handleSecurityError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);

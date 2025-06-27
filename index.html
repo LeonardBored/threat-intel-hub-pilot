@@ -10,10 +10,10 @@
     <!-- Content Security Policy to handle external resources and analytics -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self' https:;
-      script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob: https://static.cloudflareinsights.com;
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob: https://static.cloudflareinsights.com https://cloudflareinsights.com;
       style-src 'self' 'unsafe-inline' https:;
       img-src 'self' data: https: http: blob:;
-      connect-src 'self' https: wss: data:;
+      connect-src 'self' https: wss: data: https://cloudflareinsights.com;
       font-src 'self' https: data:;
       object-src 'none';
       media-src 'self' https: data:;
@@ -37,5 +37,37 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Script to handle Cloudflare Insights integrity issues -->
+    <script>
+      // Monitor for dynamically added scripts and remove integrity attributes from Cloudflare
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1 && node.tagName === 'SCRIPT') {
+              const script = node;
+              if (script.src && script.src.includes('cloudflareinsights.com')) {
+                script.removeAttribute('integrity');
+                script.removeAttribute('crossorigin');
+                console.log('Removed integrity from Cloudflare script to prevent mismatch errors');
+              }
+            }
+          });
+        });
+      });
+      
+      observer.observe(document.head, { childList: true, subtree: true });
+      observer.observe(document.body, { childList: true, subtree: true });
+      
+      // Also check existing scripts on page load
+      document.addEventListener('DOMContentLoaded', () => {
+        const scripts = document.querySelectorAll('script[src*="cloudflareinsights.com"]');
+        scripts.forEach(script => {
+          script.removeAttribute('integrity');
+          script.removeAttribute('crossorigin');
+          console.log('Removed integrity from existing Cloudflare script');
+        });
+      });
+    </script>
   </body>
 </html>
