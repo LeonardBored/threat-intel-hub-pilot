@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Search, ExternalLink, Camera, Shield, Copy, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -273,12 +272,8 @@ export default function URLScan() {
                             crossOrigin="anonymous"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
-                              console.log('Screenshot failed to load, falling back to placeholder');
                               target.src = '/placeholder.svg';
-                              target.onerror = null; // Prevent infinite loop
-                            }}
-                            onLoad={() => {
-                              console.log('Screenshot loaded successfully');
+                              target.onerror = null;
                             }}
                           />
                         ) : (
