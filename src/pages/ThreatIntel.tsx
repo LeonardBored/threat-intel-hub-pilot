@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { Shield, RefreshCw, AlertTriangle, Clock, Filter } from 'lucide-react';
+import { Shield, RefreshCw, AlertTriangle, Clock, Filter, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +17,7 @@ interface ThreatItem {
   source: 'threatfox' | 'otx';
   description: string;
   tags: string[];
+  source_url: string;
 }
 
 const mockThreats: ThreatItem[] = [
@@ -32,7 +32,8 @@ const mockThreats: ThreatItem[] = [
     last_seen: '2024-06-27T10:30:00Z',
     source: 'threatfox',
     description: 'Command and Control server hosting Emotet malware infrastructure',
-    tags: ['botnet', 'banking-trojan', 'active']
+    tags: ['botnet', 'banking-trojan', 'active'],
+    source_url: 'https://threatfox.abuse.ch/'
   },
   {
     id: '2',
@@ -45,7 +46,8 @@ const mockThreats: ThreatItem[] = [
     last_seen: '2024-06-27T09:45:00Z',
     source: 'otx',
     description: 'Domain serving RedLine Stealer payloads targeting credential theft',
-    tags: ['stealer', 'credential-theft', 'active']
+    tags: ['stealer', 'credential-theft', 'active'],
+    source_url: 'https://otx.alienvault.com/'
   },
   {
     id: '3',
@@ -57,7 +59,8 @@ const mockThreats: ThreatItem[] = [
     last_seen: '2024-06-27T11:00:00Z',
     source: 'threatfox',
     description: 'Phishing page mimicking legitimate banking website to steal credentials',
-    tags: ['phishing', 'banking', 'credential-theft']
+    tags: ['phishing', 'banking', 'credential-theft'],
+    source_url: 'https://threatfox.abuse.ch/'
   },
   {
     id: '4',
@@ -70,7 +73,8 @@ const mockThreats: ThreatItem[] = [
     last_seen: '2024-06-27T07:15:00Z',
     source: 'otx',
     description: 'TrickBot malware sample with advanced evasion techniques',
-    tags: ['banking-trojan', 'modular', 'evasive']
+    tags: ['banking-trojan', 'modular', 'evasive'],
+    source_url: 'https://otx.alienvault.com/'
   },
   {
     id: '5',
@@ -82,7 +86,8 @@ const mockThreats: ThreatItem[] = [
     last_seen: '2024-06-27T10:45:00Z',
     source: 'threatfox',
     description: 'IP address conducting automated vulnerability scanning against web applications',
-    tags: ['scanning', 'reconnaissance', 'active']
+    tags: ['scanning', 'reconnaissance', 'active'],
+    source_url: 'https://threatfox.abuse.ch/'
   }
 ];
 
@@ -215,13 +220,15 @@ export default function ThreatIntel() {
 
         <div className="grid gap-4">
           {filteredThreats.map((threat) => (
-            <Card key={threat.id} className="cyber-card hover:border-primary/40 transition-all duration-300">
+            <Card key={threat.id} className="cyber-card hover:border-primary/40 transition-all duration-300 cursor-pointer"
+                  onClick={() => window.open(threat.source_url, '_blank')}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <CardTitle className="text-lg leading-tight flex items-center gap-2">
                       <span className="text-xl">{getTypeIcon(threat.type)}</span>
                       <span className="font-mono text-primary break-all">{threat.indicator}</span>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
                     </CardTitle>
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                       <Badge 

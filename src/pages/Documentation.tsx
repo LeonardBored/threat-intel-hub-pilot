@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Book, ExternalLink, Search, Filter, Cloud, Shield, Settings } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,11 +16,11 @@ interface DocItem {
 }
 
 const documentationItems: DocItem[] = [
-  // AWS Documentation
+  // AWS Documentation - Updated with current working links
   {
     title: "AWS Security Best Practices",
     description: "Comprehensive guide to implementing security controls in AWS environments",
-    url: "https://docs.aws.amazon.com/security/",
+    url: "https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html",
     provider: "aws",
     category: "Security Guidelines",
     difficulty: "intermediate"
@@ -29,7 +28,7 @@ const documentationItems: DocItem[] = [
   {
     title: "AWS IAM User Guide",
     description: "Complete documentation for AWS Identity and Access Management",
-    url: "https://docs.aws.amazon.com/iam/",
+    url: "https://docs.aws.amazon.com/iam/latest/userguide/",
     provider: "aws",
     category: "Identity & Access",
     difficulty: "beginner"
@@ -37,7 +36,7 @@ const documentationItems: DocItem[] = [
   {
     title: "AWS CloudTrail Documentation",
     description: "Logging and monitoring AWS API calls for security analysis",
-    url: "https://docs.aws.amazon.com/cloudtrail/",
+    url: "https://docs.aws.amazon.com/cloudtrail/latest/userguide/",
     provider: "aws",
     category: "Monitoring",
     difficulty: "intermediate"
@@ -45,7 +44,7 @@ const documentationItems: DocItem[] = [
   {
     title: "AWS Security Incident Response Guide",
     description: "Step-by-step incident response procedures for AWS environments",
-    url: "https://docs.aws.amazon.com/security/security-incident-response/",
+    url: "https://docs.aws.amazon.com/whitepapers/latest/aws-security-incident-response-guide/",
     provider: "aws",
     category: "Incident Response",
     difficulty: "advanced"
@@ -58,8 +57,16 @@ const documentationItems: DocItem[] = [
     category: "Network Security",
     difficulty: "intermediate"
   },
+  {
+    title: "AWS Config",
+    description: "Configuration management and compliance monitoring for AWS resources",
+    url: "https://docs.aws.amazon.com/config/latest/developerguide/",
+    provider: "aws",
+    category: "Compliance",
+    difficulty: "intermediate"
+  },
 
-  // Azure Documentation
+  // Azure Documentation - Updated with current working links
   {
     title: "Azure Security Documentation",
     description: "Microsoft Azure security features, tools, and best practices",
@@ -69,7 +76,7 @@ const documentationItems: DocItem[] = [
     difficulty: "intermediate"
   },
   {
-    title: "Azure Active Directory",
+    title: "Microsoft Entra ID (Azure AD)",
     description: "Identity and access management for Azure and Microsoft 365",
     url: "https://docs.microsoft.com/en-us/azure/active-directory/",
     provider: "azure",
@@ -77,7 +84,7 @@ const documentationItems: DocItem[] = [
     difficulty: "beginner"
   },
   {
-    title: "Azure Sentinel Documentation",
+    title: "Microsoft Sentinel Documentation",
     description: "Cloud-native SIEM and security orchestration platform",
     url: "https://docs.microsoft.com/en-us/azure/sentinel/",
     provider: "azure",
@@ -85,9 +92,9 @@ const documentationItems: DocItem[] = [
     difficulty: "advanced"
   },
   {
-    title: "Azure Security Center",
-    description: "Unified security management and threat protection",
-    url: "https://docs.microsoft.com/en-us/azure/security-center/",
+    title: "Microsoft Defender for Cloud",
+    description: "Unified security management and threat protection for hybrid cloud workloads",
+    url: "https://docs.microsoft.com/en-us/azure/defender-for-cloud/",
     provider: "azure",
     category: "Threat Protection",
     difficulty: "intermediate"
@@ -100,12 +107,20 @@ const documentationItems: DocItem[] = [
     category: "Network Security",
     difficulty: "beginner"
   },
+  {
+    title: "Azure Key Vault",
+    description: "Secure storage and management of cryptographic keys, certificates, and secrets",
+    url: "https://docs.microsoft.com/en-us/azure/key-vault/",
+    provider: "azure",
+    category: "Key Management",
+    difficulty: "intermediate"
+  },
 
-  // GCP Documentation
+  // GCP Documentation - Updated with current working links
   {
     title: "Google Cloud Security Documentation",
     description: "Security features and best practices for Google Cloud Platform",
-    url: "https://cloud.google.com/security/",
+    url: "https://cloud.google.com/docs/security",
     provider: "gcp",
     category: "Security Guidelines",
     difficulty: "intermediate"
@@ -113,7 +128,7 @@ const documentationItems: DocItem[] = [
   {
     title: "Google Cloud IAM",
     description: "Identity and Access Management for Google Cloud resources",
-    url: "https://cloud.google.com/iam/",
+    url: "https://cloud.google.com/iam/docs",
     provider: "gcp",
     category: "Identity & Access",
     difficulty: "beginner"
@@ -121,7 +136,7 @@ const documentationItems: DocItem[] = [
   {
     title: "Google Cloud Security Command Center",
     description: "Centralized security and risk management for Google Cloud",
-    url: "https://cloud.google.com/security-command-center/",
+    url: "https://cloud.google.com/security-command-center/docs",
     provider: "gcp",
     category: "Security Management",
     difficulty: "advanced"
@@ -129,7 +144,7 @@ const documentationItems: DocItem[] = [
   {
     title: "Google Cloud VPC Security",
     description: "Virtual Private Cloud security configuration and monitoring",
-    url: "https://cloud.google.com/vpc/docs/security",
+    url: "https://cloud.google.com/vpc/docs/vpc",
     provider: "gcp",
     category: "Network Security",
     difficulty: "intermediate"
@@ -137,9 +152,17 @@ const documentationItems: DocItem[] = [
   {
     title: "Google Cloud Audit Logs",
     description: "Logging and monitoring for security analysis and compliance",
-    url: "https://cloud.google.com/logging/docs/audit/",
+    url: "https://cloud.google.com/logging/docs/audit",
     provider: "gcp",
     category: "Monitoring",
+    difficulty: "intermediate"
+  },
+  {
+    title: "Google Cloud KMS",
+    description: "Key Management Service for encryption key lifecycle management",
+    url: "https://cloud.google.com/kms/docs",
+    provider: "gcp",
+    category: "Key Management",
     difficulty: "intermediate"
   }
 ];
@@ -354,11 +377,11 @@ export default function Documentation() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-2">
-            This documentation hub provides direct links to official cloud security documentation. 
-            All links open in new tabs and lead to the authoritative sources.
+            All documentation links have been verified and updated to current official sources. 
+            Links open in new tabs and lead to authoritative cloud security documentation.
           </p>
           <p className="text-xs text-muted-foreground">
-            For a production environment, consider implementing a knowledge base with 
+            For production environments, consider implementing a knowledge base with 
             internal documentation, custom playbooks, and organization-specific procedures.
           </p>
         </CardContent>
