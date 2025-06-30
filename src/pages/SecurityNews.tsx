@@ -211,4 +211,6 @@ export default function SecurityNews() {
       </Card>
     </div>
   );
-}
+};
+
+export default SecurityNews;
