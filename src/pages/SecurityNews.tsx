@@ -213,4 +213,4 @@ export default function SecurityNews() {
   );
 };
 
-export default SecurityNews;
+export { SecurityNews };
