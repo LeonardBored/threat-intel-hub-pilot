@@ -27,10 +27,7 @@ export default function ThreatIntel() {
   const [loading, setLoading] = useState(false);
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
-  const [selectedSource, setSelectedSource] = useState('all');
-  const [selectedType, setSelectedType] = useState('all');
-
-  const fetchThreats = async () => {
+  
   const fetchThreats = async () => {
     setLoading(true);
     try {
@@ -53,31 +50,9 @@ export default function ThreatIntel() {
           description: `Loaded ${data.threats.length} threat indicators`,
         });
       }
-      
-      if (error) {
-        console.error('Error fetching threats:', error);
-        toast({
-          title: "Error Loading Threats",
-          description: "Failed to fetch threat intelligence data",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (data && data.threats) {
-        setThreats(data.threats);
-        toast({
-          title: "Threats Updated",
-          description: `Loaded ${data.threats.length} threat indicators`,
-        });
-      }
     } catch (error) {
       console.error('Error:', error);
-      console.error('Error:', error);
       toast({
-        title: "Error",
-        description: "Failed to load threat intelligence",
-        variant: "destructive"
         title: "Error",
         description: "Failed to load threat intelligence",
         variant: "destructive"
@@ -88,7 +63,6 @@ export default function ThreatIntel() {
   };
 
   useEffect(() => {
-    fetchThreats();
     fetchThreats();
   }, []);
 
@@ -102,21 +76,8 @@ export default function ThreatIntel() {
     switch (type) {
       case 'ip':
         return '🌐';
-  const filteredThreats = threats.filter(threat => {
-    const matchesSource = selectedSource === 'all' || threat.source === selectedSource;
-    const matchesType = selectedType === 'all' || threat.type === selectedType;
-    return matchesSource && matchesType;
-  });
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'ip':
-        return '🌐';
       case 'domain':
-        return '🏠';
-      case 'url':
-        return '🔗';
-        return '🏠';
+        return '';
       case 'url':
         return '🔗';
       case 'hash':
@@ -138,26 +99,7 @@ export default function ThreatIntel() {
         return 'bg-red-900/20 text-red-400';
       case 'otx':
         return 'bg-blue-900/20 text-blue-400';
-        return '🔐';
       default:
-        return '❓';
-    }
-  };
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 90) return 'text-red-400';
-    if (confidence >= 70) return 'text-yellow-400';
-    return 'text-green-400';
-  };
-
-  const getSourceColor = (source: string) => {
-    switch (source) {
-      case 'threatfox':
-        return 'bg-red-900/20 text-red-400';
-      case 'otx':
-        return 'bg-blue-900/20 text-blue-400';
-      default:
-        return 'bg-gray-900/20 text-gray-400';
         return 'bg-gray-900/20 text-gray-400';
     }
   };
@@ -179,13 +121,9 @@ export default function ThreatIntel() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Shield className="h-8 w-8 text-primary" />
-      <div className="flex items-center gap-3">
-        <Shield className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold text-primary">Threat Intelligence Feeds</h1>
-          <h1 className="text-2xl font-bold text-primary">Threat Intelligence Feeds</h1>
           <p className="text-muted-foreground">
-            Latest Indicators of Compromise (IOCs) from ThreatFox and AlienVault OTX
             Latest Indicators of Compromise (IOCs) from ThreatFox and AlienVault OTX
           </p>
         </div>
@@ -195,13 +133,7 @@ export default function ThreatIntel() {
       <Card className="cyber-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-      {/* Controls */}
-      <Card className="cyber-card">
-        <CardHeader>
-          <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Active Threat Intelligence
               <AlertTriangle className="h-5 w-5" />
               Active Threat Intelligence
             </CardTitle>
@@ -314,21 +246,6 @@ export default function ThreatIntel() {
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     Last seen: {formatDate(threat.last_seen)}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-sm leading-relaxed mb-3">
-                  {threat.description}
-                </CardDescription>
-                
-                <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    First seen: {formatDate(threat.first_seen)}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    Last seen: {formatDate(threat.last_seen)}
                   </div>
                 </div>
 
@@ -357,55 +274,6 @@ export default function ThreatIntel() {
                     <ExternalLink className="h-3 w-3" />
                   </Button>
                 </div>
-
-                <div className="flex flex-wrap gap-1">
-                  {threat.tags.map((tag, index) => (
-                    <Badge 
-                      key={index} 
-                      variant="secondary" 
-                      className="text-xs bg-muted/20"
-                    >
-                      #{tag}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="mt-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent card's onClick from firing
-                      window.open(threat.source_url, '_blank');
-                    }}
-                    className="text-xs flex items-center gap-1"
-                  >
-                    View on {threat.source === 'threatfox' ? 'ThreatFox' : 'OTX'}
-                    <ExternalLink className="h-3 w-3" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <Card className="cyber-card border-green-500/20">
-        <CardHeader>
-          <CardTitle className="text-green-400">🔗 Live Feed Integration</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-2">
-            This module displays real-time threat intelligence data from ThreatFox and AlienVault OTX.
-            Each IOC links directly to its detailed analysis page on the respective platform.
-          </p>
-          <p className="text-xs text-muted-foreground mb-2">
-            • ThreatFox IOCs link to: https://threatfox.abuse.ch/ioc/{'{id}'}/
-          </p>
-          <p className="text-xs text-muted-foreground">
-            • AlienVault OTX indicators link to: https://otx.alienvault.com/indicator/{'{type}'}/{'{indicator}'}
-          </p>
-        </CardContent>
-      </Card>
               </CardContent>
             </Card>
           ))}
@@ -431,5 +299,4 @@ export default function ThreatIntel() {
       </Card>
     </div>
   );
-}
 }
