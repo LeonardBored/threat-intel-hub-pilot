@@ -22,6 +22,8 @@ export default function ThreatIntelManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterThreatLevel, setFilterThreatLevel] = useState<string>('all');
+  const [creating, setCreating] = useState(false);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{remaining: number; resetTime: number} | null>(null);
   const [formData, setFormData] = useState({
     indicator: '',
     type: 'ip',
@@ -54,7 +56,7 @@ export default function ThreatIntelManagement() {
     }
   };
 
-  // Create new IOC
+  // Create new IOC with rate limiting
   const createIOC = async () => {
     if (!formData.indicator.trim()) {
       toast({
@@ -65,31 +67,66 @@ export default function ThreatIntelManagement() {
       return;
     }
 
+    setCreating(true);
+
     try {
-      const { data, error } = await supabase
-        .from('iocs')
-        .insert([{
+      // Call the Edge Function with rate limiting
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = "https://nlpytrvdrkoiozjrjrqh.supabase.co";
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/ioc-management`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5scHl0cnZkcmtvaW96anJqcnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5OTQ5MjYsImV4cCI6MjA2NjU3MDkyNn0.VvjqQDq-2U1MQJ7wLcBt0JfxDsOSJbY5T1MXILWW5Wk'
+        },
+        body: JSON.stringify({
           ...formData,
           tags: []
-        }])
-        .select()
-        .single();
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
 
-      setIocs([data, ...iocs]);
+      // Update rate limit info from response headers
+      const remaining = parseInt(response.headers.get('X-RateLimit-Remaining') || '0');
+      const resetTime = parseInt(response.headers.get('X-RateLimit-Reset') || '0') * 1000;
+      setRateLimitInfo({ remaining, resetTime });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          toast({
+            title: "Rate Limit Exceeded",
+            description: `Too many IOC creations. Please try again in ${retryAfter} seconds.`,
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        throw new Error(result.message || 'Failed to create IOC');
+      }
+
+      // Add the new IOC to the list
+      setIocs([result.data, ...iocs]);
       resetForm();
+      
+      // Show rate limit info in success message
       toast({
         title: "Success",
-        description: "IOC created successfully"
+        description: `IOC created successfully. ${remaining} creations remaining this hour.`
       });
+
     } catch (error) {
       console.error('Error creating IOC:', error);
       toast({
         title: "Error",
-        description: "Failed to create IOC",
+        description: error instanceof Error ? error.message : "Failed to create IOC",
         variant: "destructive"
       });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -326,12 +363,30 @@ export default function ThreatIntelManagement() {
               className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400"
               rows={3}
             />
+            {/* Rate Limit Information */}
+            {rateLimitInfo && (
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-blue-400">
+                  <Shield className="h-4 w-4" />
+                  <span className="text-sm font-medium">Rate Limit Status</span>
+                </div>
+                <div className="text-xs text-blue-300 mt-1">
+                  {rateLimitInfo.remaining} IOC creations remaining this hour
+                  {rateLimitInfo.remaining === 0 && (
+                    <span className="text-yellow-400 ml-2">
+                      (Resets at {new Date(rateLimitInfo.resetTime).toLocaleTimeString()})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button 
                 onClick={isEditing ? () => updateIOC(editingId!) : createIOC}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={creating || (rateLimitInfo?.remaining === 0 && !isEditing)}
+                className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isEditing ? 'Update IOC' : 'Create IOC'}
+                {creating ? 'Creating...' : (isEditing ? 'Update IOC' : 'Create IOC')}
               </Button>
               <Button variant="outline" onClick={resetForm} className="border-gray-600 text-gray-300 hover:bg-gray-800">
                 Cancel

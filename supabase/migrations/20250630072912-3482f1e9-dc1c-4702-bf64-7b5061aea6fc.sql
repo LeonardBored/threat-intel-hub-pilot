@@ -1,115 +1,75 @@
-
--- Create IOCs table for threat intelligence indicators
-CREATE TABLE IF NOT EXISTS iocs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    indicator TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('ip', 'domain', 'url', 'hash', 'email')),
-    threat_level TEXT NOT NULL CHECK (threat_level IN ('low', 'medium', 'high', 'critical')),
-    description TEXT,
-    source TEXT,
-    tags TEXT[],
-    is_active BOOLEAN DEFAULT true,
-    confidence_score INTEGER CHECK (confidence_score >= 0 AND confidence_score <= 100),
-    first_seen TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    last_seen TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+CREATE TABLE public.iocs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  indicator text NOT NULL CHECK (char_length(indicator) <= 100),
+  type text NOT NULL CHECK (type = ANY (ARRAY['ip'::text, 'domain'::text, 'url'::text, 'hash'::text, 'email'::text])),
+  threat_level text NOT NULL CHECK (threat_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])),
+  description text CHECK (char_length(description) <= 5000),
+  source text CHECK (char_length(source) <= 100),
+  tags text[] CHECK (array_length(tags, 1) <= 50),
+  is_active boolean DEFAULT true,
+  confidence_score integer CHECK (confidence_score >= 0 AND confidence_score <= 100),
+  first_seen timestamp with time zone DEFAULT now(),
+  last_seen timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT iocs_pkey PRIMARY KEY (id)
 );
 
--- Create scan_history table for tracking all security scans
-CREATE TABLE IF NOT EXISTS scan_history (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    scan_type TEXT NOT NULL CHECK (scan_type IN ('virustotal', 'urlscan', 'hybrid_analysis', 'manual')),
-    target TEXT NOT NULL,
-    target_type TEXT NOT NULL CHECK (target_type IN ('url', 'ip', 'domain', 'hash', 'file')),
-    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'timeout')),
-    result JSONB,
-    verdict TEXT CHECK (verdict IN ('clean', 'suspicious', 'malicious', 'unknown')),
-    threat_score INTEGER CHECK (threat_score >= 0 AND threat_score <= 100),
-    scan_duration INTEGER, -- in seconds
-    error_message TEXT,
-    metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+CREATE TABLE public.scan_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  scan_type text NOT NULL CHECK (scan_type = ANY (ARRAY['virustotal'::text, 'urlscan'::text, 'hybrid_analysis'::text, 'manual'::text])),
+  target text NOT NULL CHECK (char_length(target) <= 200),
+  target_type text NOT NULL CHECK (target_type = ANY (ARRAY['url'::text, 'ip'::text, 'domain'::text, 'hash'::text, 'file'::text])),
+  status text NOT NULL CHECK (status = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'timeout'::text])),
+  result jsonb,
+  verdict text CHECK (verdict = ANY (ARRAY['clean'::text, 'suspicious'::text, 'malicious'::text, 'unknown'::text])),
+  threat_score integer CHECK (threat_score >= 0 AND threat_score <= 100),
+  scan_duration integer,
+  error_message text CHECK (char_length(error_message) <= 2000),
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT scan_history_pkey PRIMARY KEY (id)
 );
 
--- Create watchlists table for monitoring specific indicators
-CREATE TABLE IF NOT EXISTS watchlists (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    type TEXT NOT NULL CHECK (type IN ('ip', 'domain', 'url', 'hash', 'keyword')),
-    indicators TEXT[] NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    alert_threshold TEXT DEFAULT 'medium' CHECK (alert_threshold IN ('low', 'medium', 'high', 'critical')),
-    notification_settings JSONB DEFAULT '{"email": false, "slack": false, "webhook": false}',
-    last_match TIMESTAMP WITH TIME ZONE,
-    match_count INTEGER DEFAULT 0,
-    created_by TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+CREATE TABLE public.security_incidents (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL CHECK (char_length(title) <= 200),
+  description text CHECK (char_length(description) <= 500),
+  severity text NOT NULL CHECK (severity = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])),
+  status text NOT NULL CHECK (status = ANY (ARRAY['open'::text, 'investigating'::text, 'resolved'::text, 'closed'::text])),
+  category text CHECK (category = ANY (ARRAY['malware'::text, 'phishing'::text, 'data_breach'::text, 'unauthorized_access'::text, 'ddos'::text, 'insider_threat'::text, 'other'::text])),
+  assignee text CHECK (char_length(assignee) <= 100),
+  reporter text CHECK (char_length(reporter) <= 100),
+  affected_systems text[] CHECK (array_length(affected_systems, 1) <= 100),
+  iocs_related text[] CHECK (array_length(iocs_related, 1) <= 200),
+  timeline jsonb DEFAULT '[]'::jsonb,
+  resolution_notes text CHECK (char_length(resolution_notes) <= 500),
+  lessons_learned text CHECK (char_length(lessons_learned) <= 500),
+  tags text[] CHECK (array_length(tags, 1) <= 50),
+  priority integer DEFAULT 3 CHECK (priority >= 1 AND priority <= 5),
+  estimated_impact text CHECK (estimated_impact = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])),
+  actual_impact text CHECK (actual_impact = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])),
+  incident_date timestamp with time zone DEFAULT now(),
+  resolved_date timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT security_incidents_pkey PRIMARY KEY (id)
 );
 
--- Create security_incidents table for incident management
-CREATE TABLE IF NOT EXISTS security_incidents (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT,
-    severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
-    status TEXT NOT NULL CHECK (status IN ('open', 'investigating', 'resolved', 'closed')),
-    category TEXT CHECK (category IN ('malware', 'phishing', 'data_breach', 'unauthorized_access', 'ddos', 'insider_threat', 'other')),
-    assignee TEXT,
-    reporter TEXT,
-    affected_systems TEXT[],
-    iocs_related UUID[],
-    timeline JSONB DEFAULT '[]',
-    resolution_notes TEXT,
-    lessons_learned TEXT,
-    tags TEXT[],
-    priority INTEGER DEFAULT 3 CHECK (priority >= 1 AND priority <= 5),
-    estimated_impact TEXT CHECK (estimated_impact IN ('low', 'medium', 'high', 'critical')),
-    actual_impact TEXT CHECK (actual_impact IN ('low', 'medium', 'high', 'critical')),
-    incident_date TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    resolved_date TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+CREATE TABLE public.watchlists (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL CHECK (char_length(name) <= 100),
+  description text CHECK (char_length(description) <= 500),
+  type text NOT NULL CHECK (type = ANY (ARRAY['ip'::text, 'domain'::text, 'url'::text, 'hash'::text, 'keyword'::text])),
+  indicators text[] NOT NULL CHECK (array_length(indicators, 1) <= 500),
+  is_active boolean DEFAULT true,
+  alert_threshold text DEFAULT 'medium'::text CHECK (alert_threshold = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])),
+  notification_settings jsonb DEFAULT '{"email": false, "slack": false, "webhook": false}'::jsonb,
+  last_match timestamp with time zone,
+  match_count integer DEFAULT 0,
+  created_by text CHECK (char_length(created_by) <= 100),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT watchlists_pkey PRIMARY KEY (id)
 );
-
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_iocs_type ON iocs(type);
-CREATE INDEX IF NOT EXISTS idx_iocs_threat_level ON iocs(threat_level);
-CREATE INDEX IF NOT EXISTS idx_iocs_created_at ON iocs(created_at);
-CREATE INDEX IF NOT EXISTS idx_scan_history_scan_type ON scan_history(scan_type);
-CREATE INDEX IF NOT EXISTS idx_scan_history_status ON scan_history(status);
-CREATE INDEX IF NOT EXISTS idx_scan_history_created_at ON scan_history(created_at);
-CREATE INDEX IF NOT EXISTS idx_watchlists_type ON watchlists(type);
-CREATE INDEX IF NOT EXISTS idx_watchlists_is_active ON watchlists(is_active);
-CREATE INDEX IF NOT EXISTS idx_security_incidents_status ON security_incidents(status);
-CREATE INDEX IF NOT EXISTS idx_security_incidents_severity ON security_incidents(severity);
-CREATE INDEX IF NOT EXISTS idx_security_incidents_created_at ON security_incidents(created_at);
-
--- Create updated_at triggers
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER update_iocs_updated_at BEFORE UPDATE ON iocs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_scan_history_updated_at BEFORE UPDATE ON scan_history FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_watchlists_updated_at BEFORE UPDATE ON watchlists FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_security_incidents_updated_at BEFORE UPDATE ON security_incidents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Enable Row Level Security (RLS)
-ALTER TABLE iocs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE scan_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE watchlists ENABLE ROW LEVEL SECURITY;
-ALTER TABLE security_incidents ENABLE ROW LEVEL SECURITY;
-
--- Create policies (allowing all for now, can be restricted later)
-CREATE POLICY "Allow all operations on iocs" ON iocs FOR ALL USING (true);
-CREATE POLICY "Allow all operations on scan_history" ON scan_history FOR ALL USING (true);
-CREATE POLICY "Allow all operations on watchlists" ON watchlists FOR ALL USING (true);
-CREATE POLICY "Allow all operations on security_incidents" ON security_incidents FOR ALL USING (true);

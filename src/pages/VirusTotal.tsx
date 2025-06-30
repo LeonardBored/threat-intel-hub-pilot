@@ -166,42 +166,64 @@ export default function VirusTotal() {
     if (category) {
       switch (category.toLowerCase()) {
         case 'malicious':
-          return 'text-red-400 bg-red-900/20';
+          return 'text-red-400 bg-red-900/20 border-red-500/30';
         case 'suspicious':
-          return 'text-yellow-400 bg-yellow-900/20';
+          return 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30';
         case 'harmless':
         case 'clean':
-          return 'text-green-400 bg-green-900/20';
+          return 'text-green-400 bg-green-900/20 border-green-500/30';
         case 'undetected':
-          return 'text-gray-400 bg-gray-900/20';
+          return 'text-gray-400 bg-gray-900/20 border-gray-500/30';
         case 'timeout':
         case 'failure':
-          return 'text-orange-400 bg-orange-900/20';
+          return 'text-orange-400 bg-orange-900/20 border-orange-500/30';
         default:
-          return 'text-gray-400 bg-gray-900/20';
+          return 'text-gray-400 bg-gray-900/20 border-gray-500/30';
       }
     }
     
-    // Fallback to result-based detection
-    if (!result || result === 'Clean' || result === 'Undetected' || result === 'null') {
-      return 'text-green-400 bg-green-900/20';
+    // Fallback to result-based detection with enhanced keywords
+    const resultLower = result?.toLowerCase() || '';
+    
+    // High-threat malicious keywords
+    if (resultLower.includes('malicious') || 
+        resultLower.includes('trojan') || 
+        resultLower.includes('virus') || 
+        resultLower.includes('malware') ||
+        resultLower.includes('phishing') ||
+        resultLower.includes('backdoor') ||
+        resultLower.includes('ransomware') ||
+        resultLower.includes('rootkit') ||
+        resultLower.includes('spyware') ||
+        resultLower.includes('worm') ||
+        resultLower.includes('hijacker')) {
+      return 'text-red-400 bg-red-900/20 border-red-500/30';
     }
-    if (result.toLowerCase().includes('malicious') || 
-        result.toLowerCase().includes('trojan') || 
-        result.toLowerCase().includes('virus') || 
-        result.toLowerCase().includes('malware') ||
-        result.toLowerCase().includes('phishing') ||
-        result.toLowerCase().includes('backdoor') ||
-        result.toLowerCase().includes('ransomware')) {
-      return 'text-red-400 bg-red-900/20';
+    
+    // Medium-threat suspicious keywords
+    if (resultLower.includes('suspicious') ||
+        resultLower.includes('potentially') ||
+        resultLower.includes('pup') ||
+        resultLower.includes('adware') ||
+        resultLower.includes('unwanted') ||
+        resultLower.includes('riskware') ||
+        resultLower.includes('greyware')) {
+      return 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30';
     }
-    if (result.toLowerCase().includes('suspicious') ||
-        result.toLowerCase().includes('potentially') ||
-        result.toLowerCase().includes('pup') ||
-        result.toLowerCase().includes('adware')) {
-      return 'text-yellow-400 bg-yellow-900/20';
+    
+    // Timeout/error states
+    if (resultLower.includes('timeout') || resultLower.includes('error')) {
+      return 'text-orange-400 bg-orange-900/20 border-orange-500/30';
     }
-    return 'text-gray-400 bg-gray-900/20';
+    
+    // Clean results
+    if (!result || result === 'Clean' || result === 'Undetected' || result === 'null' || 
+        resultLower === 'clean' || resultLower === 'harmless') {
+      return 'text-green-400 bg-green-900/20 border-green-500/30';
+    }
+    
+    // Default for unknown
+    return 'text-gray-400 bg-gray-900/20 border-gray-500/30';
   };
 
   const getVerdictIcon = (verdict: string) => {
@@ -412,77 +434,109 @@ export default function VirusTotal() {
                       )}
                       <div className="space-y-2">
                         {(() => {
-                          // Separate malicious/suspicious from clean/undetected
-                          const maliciousAndSuspicious = result.vendors.filter(vendor => {
-                            if (vendor.category?.toLowerCase() === 'malicious' || vendor.category?.toLowerCase() === 'suspicious') {
-                              return true;
+                          // Enhanced priority-based sorting function
+                          const getThreatPriority = (vendor: any): number => {
+                            const category = vendor.category?.toLowerCase();
+                            const result = vendor.result?.toLowerCase() || '';
+                            
+                            // Priority 0: Explicitly malicious category or high-threat keywords
+                            if (category === 'malicious' || 
+                                result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
+                                result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
+                                result.includes('ransomware') || result.includes('rootkit') || result.includes('spyware') ||
+                                result.includes('worm') || result.includes('hijacker')) {
+                              return 0;
                             }
-                            if (vendor.result && vendor.result !== 'Clean' && vendor.result !== 'Undetected' && vendor.result !== 'null') {
-                              const result = vendor.result.toLowerCase();
-                              return result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
-                                     result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
-                                     result.includes('ransomware') || result.includes('suspicious') || result.includes('potentially') || 
-                                     result.includes('pup') || result.includes('adware');
+                            
+                            // Priority 1: Suspicious category or medium-threat keywords
+                            if (category === 'suspicious' || 
+                                result.includes('suspicious') || result.includes('potentially') || 
+                                result.includes('pup') || result.includes('adware') || result.includes('unwanted') ||
+                                result.includes('riskware') || result.includes('greyware')) {
+                              return 1;
                             }
-                            return false;
-                          });
-
-                          const cleanAndUndetected = result.vendors.filter(vendor => {
-                            if (vendor.category?.toLowerCase() === 'malicious' || vendor.category?.toLowerCase() === 'suspicious') {
-                              return false;
-                            }
-                            if (vendor.result && vendor.result !== 'Clean' && vendor.result !== 'Undetected' && vendor.result !== 'null') {
-                              const result = vendor.result.toLowerCase();
-                              return !(result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
-                                      result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
-                                      result.includes('ransomware') || result.includes('suspicious') || result.includes('potentially') || 
-                                      result.includes('pup') || result.includes('adware'));
-                            }
-                            return true;
-                          });
-
-                          // Sort malicious/suspicious by priority (malicious first, then suspicious)
-                          const sortedMaliciousAndSuspicious = maliciousAndSuspicious.sort((a, b) => {
-                            const getPriority = (vendor: any) => {
-                              if (vendor.category?.toLowerCase() === 'malicious') return 0;
-                              if (vendor.category?.toLowerCase() === 'suspicious') return 1;
-                              if (vendor.result && vendor.result !== 'Clean' && vendor.result !== 'Undetected' && vendor.result !== 'null') {
-                                const result = vendor.result.toLowerCase();
-                                if (result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
-                                    result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
-                                    result.includes('ransomware')) return 0;
-                                if (result.includes('suspicious') || result.includes('potentially') || 
-                                    result.includes('pup') || result.includes('adware')) return 1;
-                              }
+                            
+                            // Priority 2: Timeout or failure (inconclusive)
+                            if (category === 'timeout' || category === 'failure' || 
+                                result.includes('timeout') || result.includes('error')) {
                               return 2;
-                            };
-                            return getPriority(a) - getPriority(b);
+                            }
+                            
+                            // Priority 3: Clean/harmless
+                            if (category === 'harmless' || category === 'clean' || 
+                                result === 'clean' || result.includes('harmless')) {
+                              return 3;
+                            }
+                            
+                            // Priority 4: Undetected/no result
+                            if (category === 'undetected' || !result || result === 'clean' || 
+                                result === 'undetected' || result === 'null' || result === 'none') {
+                              return 4;
+                            }
+                            
+                            // Priority 5: Unknown/other
+                            return 5;
+                          };
+
+                          // Sort all vendors by threat priority
+                          const sortedVendors = [...result.vendors].sort((a, b) => {
+                            const priorityA = getThreatPriority(a);
+                            const priorityB = getThreatPriority(b);
+                            
+                            // If same priority, sort alphabetically by vendor name for consistency
+                            if (priorityA === priorityB) {
+                              return a.name.localeCompare(b.name);
+                            }
+                            
+                            return priorityA - priorityB;
                           });
 
-                          // Combine arrays: malicious/suspicious first, then clean/undetected
-                          const sortedVendors = [...sortedMaliciousAndSuspicious, ...cleanAndUndetected];
+                          return sortedVendors.map((vendor, index) => {
+                            const priority = getThreatPriority(vendor);
+                            const isFirstInGroup = index === 0 || getThreatPriority(sortedVendors[index - 1]) !== priority;
+                            
+                            // Get priority group label and styling
+                            const getPriorityInfo = (priority: number) => {
+                              switch (priority) {
+                                case 0: return { label: "🚨 Malicious Detections", color: "text-red-400", bgColor: "bg-red-900/10" };
+                                case 1: return { label: "⚠️ Suspicious Detections", color: "text-yellow-400", bgColor: "bg-yellow-900/10" };
+                                case 2: return { label: "❓ Inconclusive Results", color: "text-orange-400", bgColor: "bg-orange-900/10" };
+                                case 3: return { label: "✅ Clean/Harmless", color: "text-green-400", bgColor: "bg-green-900/10" };
+                                case 4: return { label: "⚪ Undetected", color: "text-gray-400", bgColor: "bg-gray-900/10" };
+                                default: return { label: "❔ Other", color: "text-gray-400", bgColor: "bg-gray-900/10" };
+                              }
+                            };
 
-                          return sortedVendors.map((vendor, index) => (
-                            <div 
-                              key={index}
-                              className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
-                            >
-                              <div className="font-medium">{vendor.name}</div>
-                              <div className="flex items-center gap-2">
-                                <Badge 
-                                  variant="outline"
-                                  className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
-                                >
-                                  {vendor.result || 'Clean'}
-                                </Badge>
-                                {vendor.category && vendor.category !== 'undetected' && (
-                                  <span className="text-xs text-muted-foreground capitalize">
-                                    {vendor.category}
-                                  </span>
+                            const priorityInfo = getPriorityInfo(priority);
+
+                            return (
+                              <div key={index}>
+                                {isFirstInGroup && (
+                                  <div className={`text-xs font-medium ${priorityInfo.color} mb-2 mt-4 first:mt-0 px-2 py-1 rounded ${priorityInfo.bgColor}`}>
+                                    {priorityInfo.label}
+                                  </div>
                                 )}
+                                <div 
+                                  className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
+                                >
+                                  <div className="font-medium">{vendor.name}</div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge 
+                                      variant="outline"
+                                      className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
+                                    >
+                                      {vendor.result || 'Clean'}
+                                    </Badge>
+                                    {vendor.category && vendor.category !== 'undetected' && (
+                                      <span className="text-xs text-muted-foreground capitalize">
+                                        {vendor.category}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          ));
+                            );
+                          });
                         })()}
                       </div>
                     </CardContent>
