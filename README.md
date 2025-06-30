@@ -2,7 +2,7 @@
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/e5f6cc1a-47b9-4cd5-a21f-99a61ad71b6e
+**URL**: https://threat-intel-hub-pilot.lovable.app/
 
 ## Technologies are used for this project?
 
