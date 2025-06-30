@@ -108,19 +108,36 @@ export default function Dashboard() {
 
   const fetchRealStats = async () => {
     try {
+      // Get today's date for filtering
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+
+      // Fetch real scan history for today
+      const { data: scanData, error: scanError } = await supabase
+        .from('scan_history')
+        .select('*')
+        .gte('created_at', startOfDay)
+        .lt('created_at', endOfDay);
+
+      if (scanError) {
+        console.error('Error fetching scan history:', scanError);
+      }
+
       // Fetch threat intelligence count
       const { data: threatData } = await supabase.functions.invoke('threat-intelligence');
       const threatCount = threatData?.threats?.length || 0;
-      
-      // Generate realistic stats based on current time
-      const now = new Date();
-      const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
-      const seed = daysSinceEpoch % 100;
-      
-      const scansToday = 150 + (seed * 3);
-      const threatsDetected = Math.floor(scansToday * 0.08) + (seed % 5);
-      const cleanResults = scansToday - threatsDetected;
-      
+
+      // Calculate real stats from scan data
+      const scans = scanData || [];
+      const scansToday = scans.length;
+      const threatsDetected = scans.filter(scan => 
+        scan.verdict === 'malicious' || scan.verdict === 'suspicious'
+      ).length;
+      const cleanResults = scans.filter(scan => 
+        scan.verdict === 'clean' || scan.verdict === 'undetected'
+      ).length;
+
       setStats({
         scansToday,
         threatsDetected,
@@ -129,12 +146,12 @@ export default function Dashboard() {
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
-      // Fallback to static data
+      // Fallback to zero stats to show real data unavailable
       setStats({
-        scansToday: 247,
-        threatsDetected: 12,
-        cleanResults: 235,
-        activeFeedCount: 15
+        scansToday: 0,
+        threatsDetected: 0,
+        cleanResults: 0,
+        activeFeedCount: 0
       });
     } finally {
       setLoading(false);

@@ -411,27 +411,45 @@ export default function VirusTotal() {
                         </div>
                       )}
                       <div className="space-y-2">
-                        {result.vendors.map((vendor, index) => (
-                          <div 
-                            key={index}
-                            className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
-                          >
-                            <div className="font-medium">{vendor.name}</div>
-                            <div className="flex items-center gap-2">
-                              <Badge 
-                                variant="outline"
-                                className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
-                              >
-                                {vendor.result || 'Clean'}
-                              </Badge>
-                              {vendor.category && vendor.category !== 'undetected' && (
-                                <span className="text-xs text-muted-foreground capitalize">
-                                  {vendor.category}
-                                </span>
-                              )}
+                        {result.vendors
+                          .sort((a, b) => {
+                            // Priority order: malicious, suspicious, clean/undetected
+                            const getPriority = (vendor: any) => {
+                              if (vendor.category?.toLowerCase() === 'malicious') return 0;
+                              if (vendor.category?.toLowerCase() === 'suspicious') return 1;
+                              if (vendor.result && vendor.result !== 'Clean' && vendor.result !== 'Undetected' && vendor.result !== 'null') {
+                                const result = vendor.result.toLowerCase();
+                                if (result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
+                                    result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
+                                    result.includes('ransomware')) return 0;
+                                if (result.includes('suspicious') || result.includes('potentially') || 
+                                    result.includes('pup') || result.includes('adware')) return 1;
+                              }
+                              return 2; // Clean/undetected
+                            };
+                            return getPriority(a) - getPriority(b);
+                          })
+                          .map((vendor, index) => (
+                            <div 
+                              key={index}
+                              className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="font-medium">{vendor.name}</div>
+                              <div className="flex items-center gap-2">
+                                <Badge 
+                                  variant="outline"
+                                  className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
+                                >
+                                  {vendor.result || 'Clean'}
+                                </Badge>
+                                {vendor.category && vendor.category !== 'undetected' && (
+                                  <span className="text-xs text-muted-foreground capitalize">
+                                    {vendor.category}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     </CardContent>
                   </Card>
