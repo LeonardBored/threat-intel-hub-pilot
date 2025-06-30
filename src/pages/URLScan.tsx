@@ -1,190 +1,570 @@
+import { useState, useEffect } from 'react';
+import { Search, ExternalLink, Camera, Shield, Copy, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Globe, Search, ExternalLink, Image, Shield, AlertTriangle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+interface HTTPRequest {
+  url: string;
+  method: string;
+  status: number;
+  type: string;
+  size: number;
+}
 
-const URLScan = () => {
+interface Redirect {
+  from: string;
+  to: string;
+  status: number;
+}
+
+interface URLScanResult {
+  url: string;
+  verdict: 'safe' | 'malicious' | 'suspicious' | 'scanning';
+  screenshotUrl: string | null;
+  reportUrl: string;
+  score: number;
+  uuid?: string;
+  status?: 'submitted' | 'processing' | 'complete' | 'error';
+  progress?: number;
+  analysis: {
+    requests: number;
+    domains: number;
+    ips: number;
+    countries: string[];
+  };
+  httpRequests?: HTTPRequest[];
+  redirects?: Redirect[];
+  behaviors?: string[];
+  message?: string;
+}
+
+export default function URLScan() {
   const [url, setUrl] = useState('');
-  const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const [result, setResult] = useState<URLScanResult | null>(null);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanStatus, setScanStatus] = useState('');
+  const [scanUuid, setScanUuid] = useState<string | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+
+  const pollScanStatus = async (uuid: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
+        body: { uuid }
+      });
+
+      if (error) {
+        console.error('Polling error:', error);
+        return;
+      }
+
+      if (data.status === 'complete') {
+        // Scan is complete
+        setResult(data);
+        setScanProgress(100);
+        setScanStatus('Scan complete!');
+        setLoading(false);
+        setScanUuid(null);
+        
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+
+        toast({
+          title: "Scan Complete",
+          description: `URL analysis finished for: ${data.url}`,
+        });
+      } else if (data.status === 'processing') {
+        // Update progress
+        setScanProgress(data.progress || 50);
+        setScanStatus(data.message || 'Scan in progress...');
+      } else if (data.status === 'error') {
+        // Handle error
+        setLoading(false);
+        setScanUuid(null);
+        
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+
+        toast({
+          title: "Scan Failed",
+          description: data.error || "An error occurred during scanning",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+    }
+  };
 
   const handleScan = async () => {
     if (!url.trim()) {
       toast({
         title: "URL Required",
         description: "Please enter a URL to scan.",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
 
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
-        body: { url: url.trim() }
-      });
+    // Clear any existing polling
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
 
-      if (error) throw error;
-
-      setResults(data);
+    let processedUrl = url.trim();
+    
+    // Auto-add https:// if no protocol is specified
+    if (!processedUrl.startsWith('http://') && !processedUrl.startsWith('https://')) {
+      processedUrl = 'https://' + processedUrl;
+      setUrl(processedUrl); // Update the input field to show the full URL
       toast({
-        title: "Scan Complete",
-        description: "URLScan.io analysis completed successfully.",
+        title: "Protocol Added",
+        description: "Added https:// to the URL for security.",
       });
+    }
+
+    setLoading(true);
+    setScanProgress(0);
+    setScanStatus('Submitting URL for analysis...');
+    setResult(null);
+    
+    try {
+      // Submit URL for scanning
+      const { data, error } = await supabase.functions.invoke('urlscan-analysis', {
+        body: { url: processedUrl }
+      });
+
+      if (error) {
+        console.error('Supabase function error:', error);
+        toast({
+          title: "Scan Failed",
+          description: error.message || "Failed to scan the URL. Please try again.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (data.error) {
+        toast({
+          title: "Scan Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Scan submitted successfully, start polling
+      setScanUuid(data.uuid);
+      setScanProgress(data.progress || 10);
+      setScanStatus(data.message || 'URL submitted for scanning...');
+
+      // Start polling for updates every 3 seconds
+      const interval = setInterval(() => {
+        pollScanStatus(data.uuid);
+      }, 3000);
+      
+      setPollingInterval(interval);
+
+      // Also set initial result with basic info
+      setResult({
+        url: processedUrl,
+        verdict: 'scanning',
+        screenshotUrl: null,
+        reportUrl: data.reportUrl || '',
+        score: 0,
+        uuid: data.uuid,
+        status: data.status,
+        progress: data.progress,
+        analysis: {
+          requests: 0,
+          domains: 0,
+          ips: 0,
+          countries: []
+        }
+      });
+
     } catch (error) {
       console.error('Scan error:', error);
       toast({
         title: "Scan Failed",
-        description: "Failed to complete URLScan.io analysis. Please try again.",
-        variant: "destructive",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
       });
-    } finally {
       setLoading(false);
     }
   };
 
-  const getThreatScore = (score: number) => {
-    if (score >= 70) return { level: 'High Risk', color: 'bg-red-500' };
-    if (score >= 40) return { level: 'Medium Risk', color: 'bg-yellow-500' };
-    return { level: 'Low Risk', color: 'bg-green-500' };
+  const getVerdictColor = (verdict: string) => {
+    switch (verdict) {
+      case 'safe':
+        return 'text-green-400';
+      case 'malicious':
+        return 'text-red-400';
+      case 'suspicious':
+        return 'text-yellow-400';
+      case 'scanning':
+        return 'text-blue-400';
+      default:
+        return 'text-gray-400';
+    }
   };
+
+  const getScoreColor = (score: number) => {
+    if (score < 30) return 'text-green-400';
+    if (score < 70) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  // Cleanup polling interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">URLScan.io Analysis</h1>
-        <p className="text-muted-foreground">
-          Comprehensive website security scanning and analysis
-        </p>
+      <div className="flex items-center gap-3">
+        <Search className="h-8 w-8 text-primary" />
+        <div>
+          <h1 className="text-2xl font-bold text-primary">URLScan.io Analysis</h1>
+          <p className="text-muted-foreground">
+            Analyze suspicious URLs and websites for security threats
+          </p>
+        </div>
       </div>
 
-      <Card>
+      <Card className="cyber-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            Website Scanner
+            <Shield className="h-5 w-5" />
+            Website Security Scan
           </CardTitle>
           <CardDescription>
-            Enter a URL to perform detailed security analysis
+            Submit a URL for comprehensive security analysis and screenshot capture. HTTPS prefix will be added automatically if not specified.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Input
-            type="url"
-            placeholder="Enter URL (e.g., https://example.com)"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="font-mono text-sm"
-          />
-          <Button onClick={handleScan} disabled={loading} className="w-full">
-            <Search className="h-4 w-4 mr-2" />
-            {loading ? 'Scanning...' : 'Scan Website'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {results && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Scan Overview</span>
-                {results.result && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={results.result} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      View Full Report
-                    </a>
-                  </Button>
+          <div className="space-y-2">
+            <Label htmlFor="url-input">Website URL</Label>
+            <div className="flex gap-2">
+              <Input
+                id="url-input"
+                className="cyber-input flex-1"
+                placeholder="example.com or https://example.com"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleScan()}
+                disabled={loading}
+              />
+              <Button 
+                onClick={handleScan} 
+                disabled={loading}
+                className="cyber-button min-w-[100px]"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </div>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Scan URL
+                  </>
                 )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 border rounded">
-                  <Shield className="h-8 w-8 mx-auto mb-2 text-blue-500" />
-                  <div className="font-semibold">Security Score</div>
-                  <div className="text-2xl font-bold">
-                    {results.verdicts?.overall?.score || 'N/A'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Progress bar when loading */}
+          {loading && (
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{scanStatus}</span>
+                <span className="text-primary">{Math.round(scanProgress)}%</span>
+              </div>
+              <div className="w-full bg-muted/20 rounded-full h-2">
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${scanProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                URLScan.io is analyzing the website and capturing a screenshot...
+              </p>
+            </div>
+          )}
+
+          {result && (
+            <div className="space-y-6 mt-6">
+              <div className="border-t border-primary/20 pt-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Results Summary */}
+                  <div className="space-y-4">
+                    <Card className="bg-muted/20">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">Scan Results</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span>Verdict:</span>
+                          <Badge 
+                            variant={result.verdict === 'safe' ? 'secondary' : 'destructive'}
+                            className={`${getVerdictColor(result.verdict)} capitalize`}
+                          >
+                            {result.verdict}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Risk Score:</span>
+                          <span className={`font-mono text-lg ${getScoreColor(result.score)}`}>
+                            {result.score}/100
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>HTTP Requests:</span>
+                          <span className="text-primary">{result.analysis.requests}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Domains:</span>
+                          <span className="text-primary">{result.analysis.domains}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>IP Addresses:</span>
+                          <span className="text-primary">{result.analysis.ips}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Countries:</span>
+                          <span className="text-primary">{result.analysis.countries.join(', ') || 'N/A'}</span>
+                        </div>
+                        {result.message && (
+                          <div className="text-sm text-yellow-400 mt-2">
+                            {result.message}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-muted/20">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">Scanned URL</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-mono break-all text-primary">
+                            {result.url}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2"
+                            onClick={() => {
+                              navigator.clipboard.writeText(result.url);
+                              toast({ title: "URL copied to clipboard" });
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-3 cyber-button"
+                          onClick={() => window.open(result.reportUrl, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          View Full Report
+                        </Button>
+                      </CardContent>
+                    </Card>
                   </div>
-                </div>
-                <div className="text-center p-4 border rounded">
-                  <Globe className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                  <div className="font-semibold">Status</div>
-                  <Badge className="mt-1">
-                    {results.page?.status || 'Completed'}
-                  </Badge>
-                </div>
-                <div className="text-center p-4 border rounded">
-                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-orange-500" />
-                  <div className="font-semibold">Malicious</div>
-                  <div className="text-2xl font-bold text-red-600">
-                    {results.verdicts?.overall?.malicious ? 'Yes' : 'No'}
-                  </div>
+
+                  {/* Screenshot */}
+                  <Card className="bg-muted/20">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2">
+                        <Camera className="h-5 w-5" />
+                        Website Screenshot
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="relative">
+                        {result.screenshotUrl ? (
+                          <img
+                            src={result.screenshotUrl}
+                            alt="Website screenshot"
+                            className="w-full h-64 object-cover rounded-md border border-primary/20"
+                            crossOrigin="anonymous"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder.svg';
+                              target.onerror = null;
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-64 bg-muted/40 rounded-md border border-primary/20 flex items-center justify-center">
+                            <div className="text-center">
+                              <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                              <p className="text-sm text-muted-foreground">
+                                {result.verdict === 'scanning' ? 'Screenshot processing...' : 'Screenshot not available'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                          URLScan.io capture
+                        </div>
+                        {result.screenshotUrl && (
+                          <div className="absolute top-2 right-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="text-xs"
+                              onClick={() => window.open(result.screenshotUrl, '_blank')}
+                            >
+                              Open in New Tab
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Screenshot captured during automated browsing session
+                        {result.screenshotUrl && (
+                          <span className="block mt-1 text-green-400">
+                            ✓ Screenshot available - click "Open in New Tab" if not displaying properly
+                          </span>
+                        )}
+                      </p>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
 
-              {results.task?.screenshotURL && (
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <Image className="h-5 w-5" />
-                    Website Screenshot
+              {/* Additional Details - Only show when scan is complete */}
+              {result.status === 'complete' && (result.httpRequests || result.redirects || result.behaviors) && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-primary border-b border-primary/20 pb-2">
+                    Detailed Analysis
                   </h3>
-                  <div className="border rounded-lg overflow-hidden">
-                    <img 
-                      src={results.task.screenshotURL} 
-                      alt="Website screenshot"
-                      className="w-full max-h-96 object-contain bg-gray-50"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* HTTP Requests */}
+                    {result.httpRequests && result.httpRequests.length > 0 && (
+                      <Card className="bg-muted/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">HTTP Requests ({result.httpRequests.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                          {result.httpRequests.map((req, index) => (
+                            <div key={index} className="text-xs space-y-1 p-2 bg-muted/30 rounded">
+                              <div className="flex justify-between items-start">
+                                <span className="font-mono text-primary truncate flex-1 mr-2">
+                                  {req.method} {req.url.length > 50 ? req.url.substring(0, 50) + '...' : req.url}
+                                </span>
+                                <span className={`px-1 rounded text-xs ${
+                                  req.status >= 200 && req.status < 300 ? 'bg-green-500/20 text-green-400' :
+                                  req.status >= 300 && req.status < 400 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  req.status >= 400 ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'
+                                }`}>
+                                  {req.status}
+                                </span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                Type: {req.type} | Size: {(req.size / 1024).toFixed(1)}KB
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Redirects */}
+                    {result.redirects && result.redirects.length > 0 && (
+                      <Card className="bg-muted/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Redirects ({result.redirects.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                          {result.redirects.map((redirect, index) => (
+                            <div key={index} className="text-xs space-y-1 p-2 bg-muted/30 rounded">
+                              <div className="flex items-center justify-between">
+                                <span className="text-yellow-400 font-semibold">{redirect.status}</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                From: <span className="text-primary font-mono text-xs">
+                                  {redirect.from.length > 40 ? redirect.from.substring(0, 40) + '...' : redirect.from}
+                                </span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                To: <span className="text-primary font-mono text-xs">
+                                  {redirect.to.length > 40 ? redirect.to.substring(0, 40) + '...' : redirect.to}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Behaviors */}
+                    {result.behaviors && result.behaviors.length > 0 && (
+                      <Card className="bg-muted/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Observed Behaviors ({result.behaviors.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                          {result.behaviors.map((behavior, index) => (
+                            <div key={index} className="text-xs p-2 bg-muted/30 rounded">
+                              <span className="text-primary">{behavior}</span>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {results.verdicts && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Security Verdicts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(results.verdicts).map(([engine, verdict]: [string, any]) => (
-                    <div key={engine} className="flex justify-between items-center p-3 border rounded">
-                      <span className="font-medium capitalize">{engine.replace(/([A-Z])/g, ' $1')}</span>
-                      <div className="flex gap-2 items-center">
-                        <Badge 
-                          variant={verdict.malicious ? "destructive" : "secondary"}
-                          className="text-xs"
-                        >
-                          {verdict.malicious ? 'Malicious' : 'Clean'}
-                        </Badge>
-                        {verdict.score && (
-                          <span className="text-sm text-muted-foreground">
-                            Score: {verdict.score}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            </div>
           )}
-        </div>
-      )}
+        </CardContent>
+      </Card>
+
+      <Card className="cyber-card border-green-500/20">
+        <CardHeader>
+          <CardTitle className="text-green-400">✅ Real-Time URLScan.io Integration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-2">
+            This scanner provides real-time URLScan.io analysis with live progress updates, comprehensive 
+            scan results including HTTP requests, redirects, and behavioral analysis.
+          </p>
+          <p className="text-xs text-muted-foreground mb-2">
+            • Real-time progress tracking during scan execution<br/>
+            • Live screenshot updates as they become available<br/>
+            • Detailed HTTP request and redirect analysis<br/>
+            • Behavioral pattern detection and reporting
+          </p>
+          <p className="text-xs text-yellow-400">
+            Note: Screenshots are loaded from URLScan.io's CDN. If images don't display due to CORS restrictions, 
+            use the "Open in New Tab" button to view them directly.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
-};
-
-export default URLScan;
+}

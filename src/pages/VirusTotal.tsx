@@ -1,224 +1,465 @@
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Shield, AlertTriangle, CheckCircle, ExternalLink, Search, Upload } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from 'react';
+import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
-const VirusTotal = () => {
+interface ScanResult {
+  summary: string;
+  detectionRatio: string;
+  verdict: 'clean' | 'malicious' | 'suspicious' | 'unknown' | 'scanning' | 'undetected';
+  vendors: Array<{
+    name: string;
+    result: string;
+    category: string;
+  }>;
+  stats?: {
+    malicious: number;
+    suspicious: number;
+    clean: number;
+    undetected: number;
+    timeout: number;
+    failure: number;
+    total: number;
+  };
+  virusTotalUrl?: string;
+  rawData?: any;
+}
+
+export default function VirusTotal() {
   const [input, setInput] = useState('');
-  const [scanType, setScanType] = useState<'url' | 'file' | 'hash'>('url');
-  const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const [result, setResult] = useState<ScanResult | null>(null);
+
+  // Helper function to detect if input is likely a URL
+  const isLikelyURL = (str: string) => {
+    // Check if it looks like a domain/URL (contains dots, no spaces, not an IP, not a hash)
+    return str.includes('.') && 
+           !str.includes(' ') && 
+           !str.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) && // Not an IP
+           !str.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/); // Not a hash
+  };
 
   const handleScan = async () => {
     if (!input.trim()) {
       toast({
         title: "Input Required",
-        description: "Please enter a URL, file hash, or upload a file to scan.",
-        variant: "destructive",
+        description: "Please enter a URL, IP, domain, or file hash to scan.",
+        variant: "destructive"
       });
       return;
     }
 
+    let processedInput = input.trim();
+    
+    // Auto-add https:// for URLs that don't have a protocol
+    if (isLikelyURL(processedInput) && !processedInput.startsWith('http://') && !processedInput.startsWith('https://')) {
+      processedInput = 'https://' + processedInput;
+      setInput(processedInput); // Update the input field to show the full URL
+    }
+
     setLoading(true);
+    
     try {
       const { data, error } = await supabase.functions.invoke('virustotal-scan', {
-        body: { 
-          input: input.trim(),
-          type: scanType 
-        }
+        body: { input: processedInput }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase function error:', error);
+        toast({
+          title: "Scan Failed",
+          description: error.message || "Failed to scan the target. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-      setResults(data);
+      if (data.error) {
+        toast({
+          title: "Scan Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setResult(data);
+      
       toast({
         title: "Scan Complete",
-        description: "VirusTotal scan completed successfully.",
+        description: `Analysis finished for: ${processedInput}`,
       });
     } catch (error) {
       console.error('Scan error:', error);
       toast({
         title: "Scan Failed",
-        description: "Failed to complete VirusTotal scan. Please try again.",
-        variant: "destructive",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const getThreatLevel = (positives: number, total: number) => {
-    if (positives === 0) return { level: 'Clean', color: 'bg-green-500', icon: CheckCircle };
-    if (positives / total < 0.1) return { level: 'Low Risk', color: 'bg-yellow-500', icon: AlertTriangle };
-    return { level: 'High Risk', color: 'bg-red-500', icon: AlertTriangle };
+  // Helper function to get vendor result color based on VirusTotal categories
+  const getVendorResultColor = (result: string, category?: string) => {
+    // Use category if available (more accurate)
+    if (category) {
+      switch (category.toLowerCase()) {
+        case 'malicious':
+          return 'text-red-400 bg-red-900/20';
+        case 'suspicious':
+          return 'text-yellow-400 bg-yellow-900/20';
+        case 'harmless':
+        case 'clean':
+          return 'text-green-400 bg-green-900/20';
+        case 'undetected':
+          return 'text-gray-400 bg-gray-900/20';
+        case 'timeout':
+        case 'failure':
+          return 'text-orange-400 bg-orange-900/20';
+        default:
+          return 'text-gray-400 bg-gray-900/20';
+      }
+    }
+    
+    // Fallback to result-based detection
+    if (!result || result === 'Clean' || result === 'Undetected' || result === 'null') {
+      return 'text-green-400 bg-green-900/20';
+    }
+    if (result.toLowerCase().includes('malicious') || 
+        result.toLowerCase().includes('trojan') || 
+        result.toLowerCase().includes('virus') || 
+        result.toLowerCase().includes('malware') ||
+        result.toLowerCase().includes('phishing') ||
+        result.toLowerCase().includes('backdoor') ||
+        result.toLowerCase().includes('ransomware')) {
+      return 'text-red-400 bg-red-900/20';
+    }
+    if (result.toLowerCase().includes('suspicious') ||
+        result.toLowerCase().includes('potentially') ||
+        result.toLowerCase().includes('pup') ||
+        result.toLowerCase().includes('adware')) {
+      return 'text-yellow-400 bg-yellow-900/20';
+    }
+    return 'text-gray-400 bg-gray-900/20';
+  };
+
+  const getVerdictIcon = (verdict: string) => {
+    switch (verdict) {
+      case 'clean':
+      case 'undetected':
+        return <CheckCircle className="h-5 w-5 text-green-400" />;
+      case 'malicious':
+        return <XCircle className="h-5 w-5 text-red-400" />;
+      case 'suspicious':
+        return <AlertTriangle className="h-5 w-5 text-yellow-400" />;
+      case 'scanning':
+        return <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />;
+      default:
+        return <AlertTriangle className="h-5 w-5 text-gray-400" />;
+    }
+  };
+
+  const getVerdictColor = (verdict: string) => {
+    switch (verdict) {
+      case 'clean':
+      case 'undetected':
+        return 'text-green-400';
+      case 'malicious':
+        return 'text-red-400';
+      case 'suspicious':
+        return 'text-yellow-400';
+      case 'scanning':
+        return 'text-blue-400';
+      default:
+        return 'text-gray-400';
+    }
+  };
+
+  const getVirusTotalReportUrl = (inputValue: string) => {
+    // Generate the appropriate VirusTotal report URL based on input type
+    if (inputValue.startsWith('http://') || inputValue.startsWith('https://')) {
+      // URL scan
+      const encodedUrl = btoa(inputValue).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      return `https://www.virustotal.com/gui/url/${encodedUrl}`;
+    } else if (inputValue.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/)) {
+      // Hash scan
+      return `https://www.virustotal.com/gui/file/${inputValue}`;
+    } else if (inputValue.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
+      // IP scan
+      return `https://www.virustotal.com/gui/ip-address/${inputValue}`;
+    } else {
+      // Domain scan
+      return `https://www.virustotal.com/gui/domain/${inputValue}`;
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">VirusTotal Scanner</h1>
-        <p className="text-muted-foreground">
-          Scan URLs, files, and hashes with VirusTotal's comprehensive security analysis
-        </p>
+      <div className="flex items-center gap-3">
+        <Shield className="h-8 w-8 text-primary" />
+        <div>
+          <h1 className="text-2xl font-bold text-primary">VirusTotal Scanner</h1>
+          <p className="text-muted-foreground">
+            Scan URLs, IPs, domains, and file hashes for malware detection
+          </p>
+        </div>
       </div>
 
-      <Card>
+      <Card className="cyber-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Security Scan
+            <Search className="h-5 w-5" />
+            Malware Analysis
           </CardTitle>
           <CardDescription>
-            Enter a URL, file hash, or upload a file for analysis
+            Enter a URL, IP address, domain, or file hash (MD5, SHA1, SHA256) to analyze. HTTPS prefix will be added automatically for URLs.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Button
-              variant={scanType === 'url' ? 'default' : 'outline'}
-              onClick={() => setScanType('url')}
-              size="sm"
-            >
-              URL
-            </Button>
-            <Button
-              variant={scanType === 'hash' ? 'default' : 'outline'}
-              onClick={() => setScanType('hash')}
-              size="sm"
-            >
-              Hash
-            </Button>
-            <Button
-              variant={scanType === 'file' ? 'default' : 'outline'}
-              onClick={() => setScanType('file')}
-              size="sm"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              File
-            </Button>
+          <div className="space-y-2">
+            <Label htmlFor="scan-input">Target to Scan</Label>
+            <div className="flex gap-2">
+              <Input
+                id="scan-input"
+                className="cyber-input flex-1"
+                placeholder="e.g., google.com, 8.8.8.8, or file hash..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleScan()}
+                disabled={loading}
+              />
+              <Button 
+                onClick={handleScan} 
+                disabled={loading}
+                className="cyber-button min-w-[100px]"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Scanning...
+                  </div>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Scan
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
-          {scanType === 'file' ? (
-            <Textarea
-              placeholder="File upload functionality will be implemented with file handling..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="min-h-[100px]"
-            />
-          ) : (
-            <Input
-              type="text"
-              placeholder={
-                scanType === 'url' 
-                  ? "Enter URL (e.g., https://example.com)" 
-                  : "Enter file hash (MD5, SHA1, SHA256)"
-              }
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="font-mono text-sm"
-            />
-          )}
+          {result && (
+            <div className="space-y-4 mt-6">
+              <div className="border-t border-primary/20 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <Card className="bg-muted/20">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2">
+                        {getVerdictIcon(result.verdict)}
+                        <div>
+                          <div className="font-semibold">Verdict</div>
+                          <div className={`text-sm ${getVerdictColor(result.verdict)}`}>
+                            {result.summary}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-          <Button onClick={handleScan} disabled={loading} className="w-full">
-            <Search className="h-4 w-4 mr-2" />
-            {loading ? 'Scanning...' : 'Scan with VirusTotal'}
-          </Button>
+                  <Card className="bg-muted/20">
+                    <CardContent className="p-4">
+                      <div className="font-semibold">Detection Ratio</div>
+                      <div className="text-2xl font-mono text-primary">
+                        {result.detectionRatio}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        vendors flagged this
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-muted/20">
+                    <CardContent className="p-4">
+                      <div className="font-semibold">Scanned Target</div>
+                      <div className="text-sm font-mono break-all text-primary">
+                        {input}
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2"
+                          onClick={() => {
+                            navigator.clipboard.writeText(input);
+                            toast({ title: "Copied to clipboard" });
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2"
+                          onClick={() => window.open(getVirusTotalReportUrl(input), '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {result.vendors.length > 0 && (
+                  <Card className="cyber-card">
+                    <CardHeader>
+                      <CardTitle>Vendor Analysis Results</CardTitle>
+                      <CardDescription>
+                        {result.vendors.length > 0 && result.vendors.every(v => v.category === 'undetected') 
+                          ? "No engines detected threats - showing sample of engines that analyzed this target"
+                          : "Detection results from security vendors (showing meaningful results only)"
+                        }
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {result.stats && (
+                        <div className="mb-4 p-3 bg-muted/10 rounded-md">
+                          <div className="text-sm font-medium mb-2">Detection Statistics</div>
+                          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                            <div className="text-center">
+                              <div className="font-bold text-red-400">{result.stats.malicious}</div>
+                              <div className="text-muted-foreground">Malicious</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-yellow-400">{result.stats.suspicious}</div>
+                              <div className="text-muted-foreground">Suspicious</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-green-400">{result.stats.clean}</div>
+                              <div className="text-muted-foreground">Clean</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-gray-400">{result.stats.undetected}</div>
+                              <div className="text-muted-foreground">Undetected</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-orange-400">{result.stats.timeout}</div>
+                              <div className="text-muted-foreground">Timeout</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-red-300">{result.stats.failure}</div>
+                              <div className="text-muted-foreground">Failure</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {result.vendors.length === 0 && (
+                        <div className="text-center p-4 text-muted-foreground">
+                          <p>No vendor results available for this scan.</p>
+                        </div>
+                      )}
+                      {result.vendors.length > 0 && (
+                        <>
+                          <div className="space-y-2">
+                            {result.vendors.map((vendor, index) => (
+                              <div 
+                                key={index}
+                                className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
+                              >
+                                <div className="font-medium">{vendor.name}</div>
+                                <div className="flex items-center gap-2">
+                                  <Badge 
+                                    variant="outline"
+                                    className={`font-mono ${getVendorResultColor(vendor.result, vendor.category)}`}
+                                  >
+                                    {vendor.result || 'Clean'}
+                                  </Badge>
+                                  {vendor.category && vendor.category !== 'undetected' && (
+                                    <span className="text-xs text-muted-foreground capitalize">
+                                      {vendor.category}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {result.vendors.every(v => v.category === 'undetected') && (
+                            <div className="mt-3 p-2 bg-muted/10 rounded text-xs text-muted-foreground">
+                              💡 Showing sample engines that analyzed this target. All engines report no threats detected.
+                            </div>
+                          )}
+                          {result.vendors.some(v => v.category !== 'undetected') && (
+                            <div className="mt-3 p-2 bg-muted/10 rounded text-xs text-muted-foreground">
+                              💡 Only showing engines with meaningful results (malicious, suspicious, clean). View full report for all engines.
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card className="cyber-card">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-primary">View Full VirusTotal Report</div>
+                        <p className="text-sm text-muted-foreground">
+                          Access detailed analysis and additional information on VirusTotal's platform
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="cyber-button"
+                        onClick={() => window.open(result.virusTotalUrl || getVirusTotalReportUrl(input), '_blank')}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Report
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {result.verdict === 'unknown' && (
+                  <Card className="cyber-card border-yellow-500/20">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 text-yellow-400">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="font-medium">No Analysis Available</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        This target hasn't been analyzed by VirusTotal yet. Try submitting it for analysis first.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {results && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Scan Results</span>
-              {results.permalink && (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={results.permalink} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Full Report
-                  </a>
-                </Button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {results.positives !== undefined && results.total !== undefined && (
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">
-                    {results.positives}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Detections</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {results.total}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Total Engines</div>
-                </div>
-                <div className="flex-1">
-                  {(() => {
-                    const threat = getThreatLevel(results.positives, results.total);
-                    const ThreatIcon = threat.icon;
-                    return (
-                      <Badge className={`${threat.color} text-white`}>
-                        <ThreatIcon className="h-4 w-4 mr-1" />
-                        {threat.level}
-                      </Badge>
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
-
-            <Separator />
-
-            {results.scans && (
-              <div>
-                <h3 className="font-semibold mb-3">Detection Details</h3>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {Object.entries(results.scans).map(([engine, result]: [string, any]) => (
-                    <div key={engine} className="flex justify-between items-center p-2 border rounded">
-                      <span className="font-medium text-sm">{engine}</span>
-                      <div className="flex gap-2 items-center">
-                        {result.detected ? (
-                          <>
-                            <Badge variant="destructive" className="text-xs">
-                              {result.result || 'Detected'}
-                            </Badge>
-                            <AlertTriangle className="h-4 w-4 text-red-500" />
-                          </>
-                        ) : (
-                          <>
-                            <Badge variant="secondary" className="text-xs">Clean</Badge>
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {results.scan_date && (
-              <div className="text-sm text-muted-foreground">
-                Scan Date: {new Date(results.scan_date).toLocaleString()}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <Card className="cyber-card border-green-500/20">
+        <CardHeader>
+          <CardTitle className="text-green-400">✅ Live VirusTotal Integration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-2">
+            This scanner is now connected to the real VirusTotal API and will provide live scan results 
+            from over 70 antivirus engines and security vendors.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Your API key is securely stored in Supabase and accessed through encrypted edge functions.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
-};
-
-export default VirusTotal;
+}
