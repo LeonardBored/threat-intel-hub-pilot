@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const corsHeaders = {
@@ -30,7 +31,7 @@ serve(async (req) => {
     if (!openaiApiKey) {
       console.error('OpenAI API key not found in environment variables')
       return new Response(
-        JSON.stringify({ error: 'OpenAI API configuration not found' }),
+        JSON.stringify({ error: 'OpenAI API configuration not found. Please add your OPENAI_API_KEY to Supabase Edge Function secrets.' }),
         { 
           status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -58,7 +59,7 @@ Format code blocks with proper syntax highlighting using triple backticks and la
 Keep responses focused on cybersecurity topics and provide step-by-step guidance when possible.
 Include relevant security best practices and explain potential risks or considerations.`
 
-    // Call OpenAI API
+    // Call OpenAI API with updated model and configuration
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -66,7 +67,7 @@ Include relevant security best practices and explain potential risks or consider
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Using the cost-effective model
+        model: 'gpt-4.1-2025-04-14', // Updated to latest recommended model
         messages: [
           {
             role: 'system',
@@ -77,7 +78,7 @@ Include relevant security best practices and explain potential risks or consider
             content: message
           }
         ],
-        max_tokens: 2500,
+        max_tokens: 3000,
         temperature: 0.7,
         presence_penalty: 0.1,
         frequency_penalty: 0.1,
@@ -92,9 +93,9 @@ Include relevant security best practices and explain potential risks or consider
       // Provide specific error messages based on status codes
       let errorMessage = 'Failed to get response from AI service'
       if (response.status === 401) {
-        errorMessage = 'Invalid API key configuration'
+        errorMessage = 'Invalid OpenAI API key. Please check your OPENAI_API_KEY in Supabase secrets.'
       } else if (response.status === 429) {
-        errorMessage = 'Rate limit exceeded. Please try again later.'
+        errorMessage = 'OpenAI rate limit exceeded. Please try again later.'
       } else if (response.status === 500) {
         errorMessage = 'OpenAI service temporarily unavailable'
       }
@@ -123,7 +124,7 @@ Include relevant security best practices and explain potential risks or consider
 
     const aiResponse = data.choices[0].message.content
 
-    // Log usage for monitoring (optional)
+    // Log usage for monitoring
     if (data.usage) {
       console.log('OpenAI API Usage:', {
         prompt_tokens: data.usage.prompt_tokens,
@@ -136,7 +137,7 @@ Include relevant security best practices and explain potential risks or consider
       JSON.stringify({ 
         response: aiResponse,
         usage: data.usage || null,
-        model: 'gpt-4o-mini'
+        model: 'gpt-4.1-2025-04-14'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -150,7 +151,7 @@ Include relevant security best practices and explain potential risks or consider
     let errorMessage = 'Internal server error'
     if (error instanceof Error) {
       if (error.message.includes('fetch')) {
-        errorMessage = 'Unable to connect to AI service'
+        errorMessage = 'Unable to connect to OpenAI API. Please check your internet connection.'
       } else if (error.message.includes('JSON')) {
         errorMessage = 'Invalid request format'
       }
