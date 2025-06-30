@@ -11,26 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Eye, Plus, Edit, Trash2, Search, Bell, BellOff, Target, AlertTriangle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/integrations/supabase/types';
 
-interface Watchlist {
-  id: string;
-  name: string;
-  description?: string;
-  type: 'ip' | 'domain' | 'url' | 'hash' | 'keyword';
-  indicators: string[];
-  is_active: boolean;
-  alert_threshold: 'low' | 'medium' | 'high' | 'critical';
-  notification_settings: {
-    email: boolean;
-    slack: boolean;
-    webhook: boolean;
-  };
-  last_match?: string;
-  match_count: number;
-  created_by?: string;
-  created_at: string;
-  updated_at: string;
-}
+// Use Supabase types for the Watchlist interface
+type Watchlist = Tables<'watchlists'>;
 
 export default function Watchlists() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
@@ -43,9 +27,9 @@ export default function Watchlists() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    type: 'ip' as const,
+    type: 'ip',
     indicators: '',
-    alert_threshold: 'medium' as const,
+    alert_threshold: 'medium',
     email_notifications: false,
     slack_notifications: false,
     webhook_notifications: false
@@ -230,15 +214,16 @@ export default function Watchlists() {
   };
 
   const editWatchlist = (watchlist: Watchlist) => {
+    const notificationSettings = watchlist.notification_settings as any;
     setFormData({
       name: watchlist.name,
       description: watchlist.description || '',
       type: watchlist.type,
       indicators: watchlist.indicators.join('\n'),
-      alert_threshold: watchlist.alert_threshold,
-      email_notifications: watchlist.notification_settings.email,
-      slack_notifications: watchlist.notification_settings.slack,
-      webhook_notifications: watchlist.notification_settings.webhook
+      alert_threshold: watchlist.alert_threshold || 'medium',
+      email_notifications: notificationSettings?.email || false,
+      slack_notifications: notificationSettings?.slack || false,
+      webhook_notifications: notificationSettings?.webhook || false
     });
     setIsCreating(true);
     setEditingId(watchlist.id);
@@ -363,7 +348,7 @@ export default function Watchlists() {
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400"
                 />
-                <Select value={formData.type} onValueChange={(value: any) => setFormData({...formData, type: value})}>
+                <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
                   <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                     <SelectValue placeholder="Type" />
                   </SelectTrigger>
@@ -391,7 +376,7 @@ export default function Watchlists() {
                 rows={4}
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Select value={formData.alert_threshold} onValueChange={(value: any) => setFormData({...formData, alert_threshold: value})}>
+                <Select value={formData.alert_threshold} onValueChange={(value) => setFormData({...formData, alert_threshold: value})}>
                   <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                     <SelectValue placeholder="Alert Threshold" />
                   </SelectTrigger>
@@ -443,88 +428,91 @@ export default function Watchlists() {
           ) : filteredWatchlists.length === 0 ? (
             <div className="col-span-full text-center py-8 text-gray-400">No watchlists found</div>
           ) : (
-            filteredWatchlists.map((watchlist) => (
-              <Card key={watchlist.id} className="bg-black/40 border-gray-700 backdrop-blur-sm hover:bg-black/50 transition-colors">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-white text-lg flex items-center gap-2">
-                      {watchlist.is_active ? (
-                        <Bell className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <BellOff className="h-5 w-5 text-gray-500" />
-                      )}
-                      {watchlist.name}
-                    </CardTitle>
-                    <Switch
-                      checked={watchlist.is_active}
-                      onCheckedChange={(checked) => toggleWatchlist(watchlist.id, checked)}
-                    />
-                  </div>
-                  {watchlist.description && (
-                    <p className="text-gray-400 text-sm">{watchlist.description}</p>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Badge className={getTypeColor(watchlist.type)}>
-                      {watchlist.type.toUpperCase()}
-                    </Badge>
-                    <Badge className={getThresholdColor(watchlist.alert_threshold)}>
-                      {watchlist.alert_threshold.toUpperCase()}
-                    </Badge>
-                  </div>
-                  
-                  <div className="text-sm text-gray-300">
-                    <div className="flex justify-between">
-                      <span>Indicators:</span>
-                      <span className="font-mono">{watchlist.indicators.length}</span>
+            filteredWatchlists.map((watchlist) => {
+              const notificationSettings = watchlist.notification_settings as any;
+              return (
+                <Card key={watchlist.id} className="bg-black/40 border-gray-700 backdrop-blur-sm hover:bg-black/50 transition-colors">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-white text-lg flex items-center gap-2">
+                        {watchlist.is_active ? (
+                          <Bell className="h-5 w-5 text-green-400" />
+                        ) : (
+                          <BellOff className="h-5 w-5 text-gray-500" />
+                        )}
+                        {watchlist.name}
+                      </CardTitle>
+                      <Switch
+                        checked={watchlist.is_active || false}
+                        onCheckedChange={(checked) => toggleWatchlist(watchlist.id, checked)}
+                      />
                     </div>
-                    <div className="flex justify-between">
-                      <span>Matches:</span>
-                      <span className="font-mono">{watchlist.match_count}</span>
+                    {watchlist.description && (
+                      <p className="text-gray-400 text-sm">{watchlist.description}</p>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Badge className={getTypeColor(watchlist.type)}>
+                        {watchlist.type.toUpperCase()}
+                      </Badge>
+                      <Badge className={getThresholdColor(watchlist.alert_threshold || 'medium')}>
+                        {(watchlist.alert_threshold || 'medium').toUpperCase()}
+                      </Badge>
                     </div>
-                    {watchlist.last_match && (
+                    
+                    <div className="text-sm text-gray-300">
                       <div className="flex justify-between">
-                        <span>Last Match:</span>
-                        <span className="text-xs">{new Date(watchlist.last_match).toLocaleDateString()}</span>
+                        <span>Indicators:</span>
+                        <span className="font-mono">{watchlist.indicators.length}</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex justify-between">
+                        <span>Matches:</span>
+                        <span className="font-mono">{watchlist.match_count || 0}</span>
+                      </div>
+                      {watchlist.last_match && (
+                        <div className="flex justify-between">
+                          <span>Last Match:</span>
+                          <span className="text-xs">{new Date(watchlist.last_match).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="flex items-center gap-2 text-xs">
-                    {watchlist.notification_settings.email && (
-                      <Badge variant="outline" className="border-gray-600 text-gray-400">📧 Email</Badge>
-                    )}
-                    {watchlist.notification_settings.slack && (
-                      <Badge variant="outline" className="border-gray-600 text-gray-400">💬 Slack</Badge>
-                    )}
-                    {watchlist.notification_settings.webhook && (
-                      <Badge variant="outline" className="border-gray-600 text-gray-400">🔗 Webhook</Badge>
-                    )}
-                  </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      {notificationSettings?.email && (
+                        <Badge variant="outline" className="border-gray-600 text-gray-400">📧 Email</Badge>
+                      )}
+                      {notificationSettings?.slack && (
+                        <Badge variant="outline" className="border-gray-600 text-gray-400">💬 Slack</Badge>
+                      )}
+                      {notificationSettings?.webhook && (
+                        <Badge variant="outline" className="border-gray-600 text-gray-400">🔗 Webhook</Badge>
+                      )}
+                    </div>
 
-                  <div className="flex gap-2 pt-2 border-t border-gray-700">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => editWatchlist(watchlist)}
-                      className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
-                      onClick={() => deleteWatchlist(watchlist.id)}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                    <div className="flex gap-2 pt-2 border-t border-gray-700">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => editWatchlist(watchlist)}
+                        className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        onClick={() => deleteWatchlist(watchlist.id)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </div>
       </div>
