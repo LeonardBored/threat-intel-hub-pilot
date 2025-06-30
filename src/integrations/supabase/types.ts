@@ -9,7 +9,222 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      iocs: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          description: string | null
+          first_seen: string | null
+          id: string
+          indicator: string
+          is_active: boolean | null
+          last_seen: string | null
+          source: string | null
+          tags: string[] | null
+          threat_level: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string | null
+          first_seen?: string | null
+          id?: string
+          indicator: string
+          is_active?: boolean | null
+          last_seen?: string | null
+          source?: string | null
+          tags?: string[] | null
+          threat_level: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string | null
+          first_seen?: string | null
+          id?: string
+          indicator?: string
+          is_active?: boolean | null
+          last_seen?: string | null
+          source?: string | null
+          tags?: string[] | null
+          threat_level?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      scan_history: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          result: Json | null
+          scan_duration: number | null
+          scan_type: string
+          status: string
+          target: string
+          target_type: string
+          threat_score: number | null
+          updated_at: string | null
+          verdict: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          result?: Json | null
+          scan_duration?: number | null
+          scan_type: string
+          status: string
+          target: string
+          target_type: string
+          threat_score?: number | null
+          updated_at?: string | null
+          verdict?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          result?: Json | null
+          scan_duration?: number | null
+          scan_type?: string
+          status?: string
+          target?: string
+          target_type?: string
+          threat_score?: number | null
+          updated_at?: string | null
+          verdict?: string | null
+        }
+        Relationships: []
+      }
+      security_incidents: {
+        Row: {
+          actual_impact: string | null
+          affected_systems: string[] | null
+          assignee: string | null
+          category: string | null
+          created_at: string | null
+          description: string | null
+          estimated_impact: string | null
+          id: string
+          incident_date: string | null
+          iocs_related: string[] | null
+          lessons_learned: string | null
+          priority: number | null
+          reporter: string | null
+          resolution_notes: string | null
+          resolved_date: string | null
+          severity: string
+          status: string
+          tags: string[] | null
+          timeline: Json | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          actual_impact?: string | null
+          affected_systems?: string[] | null
+          assignee?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          estimated_impact?: string | null
+          id?: string
+          incident_date?: string | null
+          iocs_related?: string[] | null
+          lessons_learned?: string | null
+          priority?: number | null
+          reporter?: string | null
+          resolution_notes?: string | null
+          resolved_date?: string | null
+          severity: string
+          status: string
+          tags?: string[] | null
+          timeline?: Json | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          actual_impact?: string | null
+          affected_systems?: string[] | null
+          assignee?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          estimated_impact?: string | null
+          id?: string
+          incident_date?: string | null
+          iocs_related?: string[] | null
+          lessons_learned?: string | null
+          priority?: number | null
+          reporter?: string | null
+          resolution_notes?: string | null
+          resolved_date?: string | null
+          severity?: string
+          status?: string
+          tags?: string[] | null
+          timeline?: Json | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      watchlists: {
+        Row: {
+          alert_threshold: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          indicators: string[]
+          is_active: boolean | null
+          last_match: string | null
+          match_count: number | null
+          name: string
+          notification_settings: Json | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          alert_threshold?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          indicators: string[]
+          is_active?: boolean | null
+          last_match?: string | null
+          match_count?: number | null
+          name: string
+          notification_settings?: Json | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          alert_threshold?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          indicators?: string[]
+          is_active?: boolean | null
+          last_match?: string | null
+          match_count?: number | null
+          name?: string
+          notification_settings?: Json | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
