@@ -14,6 +14,10 @@ import SecurityNews from "./pages/SecurityNews";
 import Documentation from "./pages/Documentation";
 import AIChat from "./pages/AIChat";
 import NotFound from "./pages/NotFound";
+import ThreatIntelManagement from "./pages/ThreatIntelManagement";
+import ScanHistory from "./pages/ScanHistory";
+import Watchlists from "./pages/Watchlists";
+import IncidentManagement from "./pages/IncidentManagement";
 
 const queryClient = new QueryClient();
 
@@ -118,6 +122,10 @@ const App = () => {
               <Route path="/virustotal" element={<VirusTotal />} />
               <Route path="/urlscan" element={<URLScan />} />
               <Route path="/threat-intel" element={<ThreatIntel />} />
+              <Route path="/threat-intel-management" element={<ThreatIntelManagement />} />
+              <Route path="/scan-history" element={<ScanHistory />} />
+              <Route path="/watchlists" element={<Watchlists />} />
+              <Route path="/incidents" element={<IncidentManagement />} />
               <Route path="/news" element={<SecurityNews />} />
               <Route path="/docs" element={<Documentation />} />
               <Route path="/ai-chat" element={<AIChat />} />

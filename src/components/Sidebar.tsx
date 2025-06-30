@@ -1,5 +1,5 @@
 
-import { Shield, Home, Search, Link, Book, Settings, User } from 'lucide-react';
+import { Shield, Home, Search, Link, Book, Settings, User, Database, History, Eye, AlertTriangle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import {
   Sidebar,
@@ -22,6 +22,13 @@ const menuItems = [
   { title: 'Security News', url: '/news', icon: Book },
   { title: 'Documentation', url: '/docs', icon: Book },
   { title: 'AI Assistant', url: '/ai-chat', icon: User },
+];
+
+const managementItems = [
+  { title: 'IOC Management', url: '/threat-intel-management', icon: Database },
+  { title: 'Scan History', url: '/scan-history', icon: History },
+  { title: 'Watchlists', url: '/watchlists', icon: Eye },
+  { title: 'Incidents', url: '/incidents', icon: AlertTriangle },
 ];
 
 export function AppSidebar() {
@@ -51,6 +58,34 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.url}
+                      end
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+                          isActive
+                            ? 'bg-primary/20 text-primary border border-primary/30'
+                            : 'hover:bg-sidebar-accent text-sidebar-foreground'
+                        }`
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!collapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-primary/70">Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {managementItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
