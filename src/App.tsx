@@ -18,35 +18,17 @@ import ThreatIntelManagement from "./pages/ThreatIntelManagement";
 import ScanHistory from "./pages/ScanHistory";
 import Watchlists from "./pages/Watchlists";
 import IncidentManagement from "./pages/IncidentManagement";
+import { suppressCloudflareErrors, suppressExternalErrors } from "./utils/cloudflare-fix";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  // Global error handler to suppress Cloudflare analytics and other external CORS errors
   useEffect(() => {
-    // Store original console.error to avoid infinite loops
-    const originalConsoleError = console.error;
-    
-    // Override console.error to suppress specific errors
-    console.error = (...args) => {
-      const errorString = args.join(' ');
-      
-      // Suppress Cloudflare and integrity related console errors
-      if (errorString.includes('cloudflareinsights') ||
-          errorString.includes('beacon.min.js') ||
-          errorString.includes('integrity') ||
-          errorString.includes('Failed to find a valid digest') ||
-          errorString.includes('sha384') ||
-          errorString.includes('CORS') ||
-          errorString.includes('Cross-Origin')) {
-        // Silently ignore these errors
-        return;
-      }
-      
-      // For all other errors, use the original console.error
-      originalConsoleError.apply(console, args);
-    };
+    // Initialize Cloudflare error suppression
+    const cleanupCloudflare = suppressCloudflareErrors();
+    const cleanupConsole = suppressExternalErrors();
 
+    // Enhanced global error handlers
     const handleError = (event: ErrorEvent) => {
       const errorMessage = event.message || '';
       const errorSource = event.filename || '';
@@ -59,6 +41,7 @@ const App = () => {
           errorMessage.includes('CORS') ||
           errorMessage.includes('Failed to find a valid digest') ||
           errorMessage.includes('sha384') ||
+          errorMessage.includes('sha512') ||
           errorMessage.includes('crossorigin')) {
         console.log('Suppressed external analytics/integrity error:', errorMessage);
         event.preventDefault();
@@ -78,7 +61,8 @@ const App = () => {
           reason.includes('Cross-Origin') ||
           reason.includes('integrity') ||
           reason.includes('Failed to find a valid digest') ||
-          reason.includes('sha384')
+          reason.includes('sha384') ||
+          reason.includes('sha512')
         )) {
         console.log('Suppressed external promise rejection:', reason);
         event.preventDefault();
@@ -102,8 +86,8 @@ const App = () => {
 
     // Cleanup
     return () => {
-      // Restore original console.error
-      console.error = originalConsoleError;
+      cleanupCloudflare();
+      cleanupConsole();
       window.removeEventListener('error', handleError);
       window.removeEventListener('error', handleSecurityError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);

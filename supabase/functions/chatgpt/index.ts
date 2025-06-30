@@ -4,6 +4,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
 serve(async (req) => {
@@ -60,6 +61,7 @@ Keep responses focused on cybersecurity topics and provide step-by-step guidance
 Include relevant security best practices and explain potential risks or considerations.`
 
     // Call OpenAI API with updated model and configuration
+    console.log('Making request to OpenAI API...')
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -67,7 +69,7 @@ Include relevant security best practices and explain potential risks or consider
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-2025-04-14', // Updated to latest recommended model
+        model: 'gpt-4o-mini', // Updated to use a current model
         messages: [
           {
             role: 'system',
@@ -137,7 +139,7 @@ Include relevant security best practices and explain potential risks or consider
       JSON.stringify({ 
         response: aiResponse,
         usage: data.usage || null,
-        model: 'gpt-4.1-2025-04-14'
+        model: 'gpt-4o-mini'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +44,52 @@ export default function VirusTotal() {
            !str.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/); // Not a hash
   };
 
+  // Function to determine target type
+  const getTargetType = (inputValue: string): 'url' | 'ip' | 'domain' | 'hash' | 'file' => {
+    if (inputValue.startsWith('http://') || inputValue.startsWith('https://')) {
+      return 'url';
+    } else if (inputValue.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
+      return 'ip';
+    } else if (inputValue.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/)) {
+      return 'hash';
+    } else if (inputValue.includes('.') && !inputValue.includes(' ')) {
+      return 'domain';
+    }
+    return 'file';
+  };
+
+  // Function to store scan result in database
+  const storeScanResult = async (target: string, scanResult: ScanResult, scanDuration: number) => {
+    try {
+      const { error } = await supabase
+        .from('scan_history')
+        .insert({
+          scan_type: 'virustotal',
+          target: target,
+          target_type: getTargetType(target),
+          status: scanResult.verdict === 'scanning' ? 'pending' : 'completed',
+          result: scanResult.rawData,
+          verdict: scanResult.verdict === 'undetected' ? 'clean' : scanResult.verdict,
+          threat_score: scanResult.stats ? Math.round((scanResult.stats.malicious + scanResult.stats.suspicious) / scanResult.stats.total * 100) : null,
+          scan_duration: scanDuration,
+          metadata: {
+            detection_ratio: scanResult.detectionRatio,
+            summary: scanResult.summary,
+            vendor_count: scanResult.vendors.length,
+            virus_total_url: scanResult.virusTotalUrl
+          }
+        });
+
+      if (error) {
+        console.error('Error storing scan result:', error);
+      } else {
+        console.log('Scan result stored successfully');
+      }
+    } catch (error) {
+      console.error('Error storing scan result:', error);
+    }
+  };
+
   const handleScan = async () => {
     if (!input.trim()) {
       toast({
@@ -64,11 +109,14 @@ export default function VirusTotal() {
     }
 
     setLoading(true);
+    const startTime = Date.now();
     
     try {
       const { data, error } = await supabase.functions.invoke('virustotal-scan', {
         body: { input: processedInput }
       });
+
+      const scanDuration = Math.round((Date.now() - startTime) / 1000);
 
       if (error) {
         console.error('Supabase function error:', error);
@@ -90,6 +138,11 @@ export default function VirusTotal() {
       }
 
       setResult(data);
+      
+      // Store successful scan result in database
+      if (data && data.verdict !== 'scanning') {
+        await storeScanResult(processedInput, data, scanDuration);
+      }
       
       toast({
         title: "Scan Complete",
