@@ -34,10 +34,10 @@ export default function ThreatIntel() {
       const { data, error } = await supabase.functions.invoke('threat-intelligence');
       
       if (error) {
-        console.error('Supabase function error:', error);
+        console.error('Error fetching threats:', error);
         toast({
           title: "Error Loading Threats",
-          description: error.message || "Failed to fetch threat intelligence data",
+          description: "Failed to fetch threat intelligence data",
           variant: "destructive"
         });
         return;
@@ -45,27 +45,9 @@ export default function ThreatIntel() {
 
       if (data && data.threats) {
         setThreats(data.threats);
-        
-        // Show different message if it's fallback data
-        if (data.error) {
-          toast({
-            title: "Threats Loaded (Fallback)",
-            description: `${data.threats.length} indicators shown - API temporarily unavailable`,
-            variant: "default"
-          });
-        } else {
-          toast({
-            title: "Threats Updated",
-            description: `Loaded ${data.threats.length} threat indicators`,
-          });
-        }
-      } else {
         toast({
-          title: "No Data",
-          description: "No threat intelligence data available",
-          variant: "default"
-        });
-      }
+          title: "Threats Updated",
+          description: `Loaded ${data.threats.length} threat indicators`,
         });
       }
     } catch (error) {

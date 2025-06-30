@@ -8,13 +8,45 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     console.log('Fetching threat intelligence data...');
+
+    // Fetch from ThreatFox
+    const threatFoxResponse = await fetch('https://threatfox-api.abuse.ch/api/v1/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: 'get_iocs',
+        days: 1
+      }),
+    });
+
+    let threatFoxData = [];
+    if (threatFoxResponse.ok) {
+      const threatFoxResult = await threatFoxResponse.json();
+      if (threatFoxResult.data) {
+        threatFoxData = threatFoxResult.data.slice(0, 10).map((item: any) => ({
+          id: item.id || Math.random().toString(),
+          indicator: item.ioc || item.indicator,
+          type: mapThreatFoxType(item.ioc_type),
+          threat_type: item.threat_type || 'Unknown',
+          malware_family: item.malware || item.malware_family,
+          confidence: 90,
+          first_seen: item.first_seen || new Date().toISOString(),
+          last_seen: item.last_seen || new Date().toISOString(),
+          source: 'threatfox',
+          description: item.comment || `ThreatFox IOC: ${item.threat_type}`,
+          tags: item.tags || [],
+          source_url: item.id ? `https://threatfox.abuse.ch/ioc/${item.id}/` : `https://threatfox.abuse.ch/browse/`
+        }));
+      }
+    }
 
     // Generate dynamic OTX data with proper URLs based on indicator type
     const generateOTXUrl = (indicator: string, type: string) => {
@@ -32,7 +64,6 @@ serve(async (req) => {
       }
     };
 
-    // Start with OTX fallback data
     const otxData = [
       {
         id: 'otx_' + Math.random().toString(),
@@ -75,88 +106,18 @@ serve(async (req) => {
       }
     ];
 
-    let threatFoxData = [];
-
-    // Try to fetch from ThreatFox with error handling
-    try {
-      const threatFoxResponse = await fetch('https://threatfox-api.abuse.ch/api/v1/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: 'get_iocs',
-          days: 1
-        }),
-      });
-
-      if (threatFoxResponse.ok) {
-        const threatFoxResult = await threatFoxResponse.json();
-        if (threatFoxResult.query_status === 'ok' && threatFoxResult.data) {
-          threatFoxData = threatFoxResult.data.slice(0, 10).map((item: any) => ({
-            id: item.id || Math.random().toString(),
-            indicator: item.ioc || item.indicator,
-            type: mapThreatFoxType(item.ioc_type),
-            threat_type: item.threat_type || 'Unknown',
-            malware_family: item.malware || item.malware_family,
-            confidence: 90,
-            first_seen: item.first_seen || new Date().toISOString(),
-            last_seen: item.last_seen || new Date().toISOString(),
-            source: 'threatfox',
-            description: item.comment || `ThreatFox IOC: ${item.threat_type}`,
-            tags: item.tags || [],
-            source_url: item.id ? `https://threatfox.abuse.ch/ioc/${item.id}/` : `https://threatfox.abuse.ch/browse/`
-          }));
-          console.log(`Successfully fetched ${threatFoxData.length} ThreatFox indicators`);
-        }
-      } else {
-        console.warn('ThreatFox API returned non-OK status:', threatFoxResponse.status);
-      }
-    } catch (threatFoxError) {
-      console.error('ThreatFox API error:', threatFoxError);
-      // Continue with empty ThreatFox data
-    }
-
     const combinedThreats = [...threatFoxData, ...otxData];
-    console.log(`Returning ${combinedThreats.length} total threats`);
 
     return new Response(
       JSON.stringify({ threats: combinedThreats }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in threat-intelligence function:', error);
-    
-    // Return a proper error response with fallback data
-    const fallbackData = [
-      {
-        id: 'fallback_' + Math.random().toString(),
-        indicator: '192.168.1.100',
-        type: 'ip',
-        threat_type: 'Example Threat',
-        confidence: 50,
-        first_seen: new Date().toISOString(),
-        last_seen: new Date().toISOString(),
-        source: 'otx',
-        description: 'Fallback data - API temporarily unavailable',
-        tags: ['example'],
-        source_url: 'https://otx.alienvault.com/'
-      }
-    ];
-
     return new Response(
-      JSON.stringify({ 
-        threats: fallbackData,
-        error: 'API temporarily unavailable, showing fallback data'
-      }),
-      { 
-        status: 200, // Return 200 instead of 500 to prevent frontend errors
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
