@@ -9,21 +9,9 @@ import { Input } from '@/components/ui/input';
 import { History, Search, Eye, Trash2, RefreshCw, Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/integrations/supabase/types';
 
-interface ScanRecord {
-  id: string;
-  scan_type: 'virustotal' | 'urlscan' | 'hybrid_analysis' | 'manual';
-  target: string;
-  target_type: 'url' | 'ip' | 'domain' | 'hash' | 'file';
-  status: 'pending' | 'completed' | 'failed' | 'timeout';
-  result?: any;
-  verdict?: 'clean' | 'suspicious' | 'malicious' | 'unknown';
-  threat_score?: number;
-  scan_duration?: number;
-  error_message?: string;
-  created_at: string;
-  updated_at: string;
-}
+type ScanRecord = Tables<'scan_history'>;
 
 export default function ScanHistory() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
@@ -268,15 +256,15 @@ export default function ScanHistory() {
                           </div>
                         </TableCell>
                         <TableCell className="text-gray-300">
-                          {scan.threat_score !== undefined ? `${scan.threat_score}%` : 'N/A'}
+                          {scan.threat_score !== undefined && scan.threat_score !== null ? `${scan.threat_score}%` : 'N/A'}
                         </TableCell>
                         <TableCell className="text-gray-300">
                           {scan.scan_duration ? `${scan.scan_duration}s` : 'N/A'}
                         </TableCell>
                         <TableCell className="text-gray-400">
-                          {new Date(scan.created_at).toLocaleDateString()}
+                          {new Date(scan.created_at || '').toLocaleDateString()}
                           <div className="text-xs text-gray-500">
-                            {new Date(scan.created_at).toLocaleTimeString()}
+                            {new Date(scan.created_at || '').toLocaleTimeString()}
                           </div>
                         </TableCell>
                         <TableCell>

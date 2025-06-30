@@ -10,28 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertTriangle, Plus, Edit, Trash2, Clock, User, Shield, Eye, Search } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/integrations/supabase/types';
 
-interface SecurityIncident {
-  id: string;
-  title: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'investigating' | 'resolved' | 'closed';
-  category?: 'malware' | 'phishing' | 'data_breach' | 'unauthorized_access' | 'ddos' | 'insider_threat' | 'other';
-  assignee?: string;
-  reporter?: string;
-  affected_systems: string[];
-  resolution_notes?: string;
-  lessons_learned?: string;
-  tags?: string[];
-  priority: number;
-  estimated_impact?: 'low' | 'medium' | 'high' | 'critical';
-  actual_impact?: 'low' | 'medium' | 'high' | 'critical';
-  incident_date: string;
-  resolved_date?: string;
-  created_at: string;
-  updated_at: string;
-}
+type SecurityIncident = Tables<'security_incidents'>;
 
 export default function IncidentManagement() {
   const [incidents, setIncidents] = useState<SecurityIncident[]>([]);
@@ -46,16 +27,16 @@ export default function IncidentManagement() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    severity: 'medium' as const,
-    status: 'open' as const,
-    category: 'other' as const,
+    severity: 'medium',
+    status: 'open',
+    category: 'other',
     assignee: '',
     reporter: '',
     affected_systems: '',
     resolution_notes: '',
     lessons_learned: '',
     priority: 3,
-    estimated_impact: 'medium' as const
+    estimated_impact: 'medium'
   });
 
   // Fetch incidents from database
@@ -160,7 +141,7 @@ export default function IncidentManagement() {
   };
 
   // Update incident status
-  const updateIncidentStatus = async (id: string, status: SecurityIncident['status']) => {
+  const updateIncidentStatus = async (id: string, status: string) => {
     try {
       const updateData: any = { status };
       if ((status === 'resolved' || status === 'closed') && 
@@ -239,16 +220,16 @@ export default function IncidentManagement() {
   const editIncident = (incident: SecurityIncident) => {
     setFormData({
       title: incident.title,
-      description: incident.description,
+      description: incident.description || '',
       severity: incident.severity,
       status: incident.status,
       category: incident.category || 'other',
       assignee: incident.assignee || '',
       reporter: incident.reporter || '',
-      affected_systems: incident.affected_systems.join(', '),
+      affected_systems: incident.affected_systems?.join(', ') || '',
       resolution_notes: incident.resolution_notes || '',
       lessons_learned: incident.lessons_learned || '',
-      priority: incident.priority,
+      priority: incident.priority || 3,
       estimated_impact: incident.estimated_impact || 'medium'
     });
     setEditingId(incident.id);
@@ -293,7 +274,7 @@ export default function IncidentManagement() {
   // Filter incidents
   const filteredIncidents = incidents.filter(incident => {
     const matchesSearch = incident.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         incident.description.toLowerCase().includes(searchTerm.toLowerCase());
+                         incident.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || incident.status === filterStatus;
     const matchesSeverity = filterSeverity === 'all' || incident.severity === filterSeverity;
     
@@ -395,7 +376,7 @@ export default function IncidentManagement() {
                 className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400"
               />
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <Select value={formData.severity} onValueChange={(value: any) => setFormData({...formData, severity: value})}>
+                <Select value={formData.severity} onValueChange={(value) => setFormData({...formData, severity: value})}>
                   <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                     <SelectValue placeholder="Severity" />
                   </SelectTrigger>
@@ -407,7 +388,7 @@ export default function IncidentManagement() {
                   </SelectContent>
                 </Select>
                 
-                <Select value={formData.status} onValueChange={(value: any) => setFormData({...formData, status: value})}>
+                <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value})}>
                   <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -419,7 +400,7 @@ export default function IncidentManagement() {
                   </SelectContent>
                 </Select>
 
-                <Select value={formData.category} onValueChange={(value: any) => setFormData({...formData, category: value})}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
                   <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
@@ -524,11 +505,11 @@ export default function IncidentManagement() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4" />
-                        <span>Created: {new Date(incident.created_at).toLocaleDateString()}</span>
+                        <span>Created: {new Date(incident.created_at || '').toLocaleDateString()}</span>
                       </div>
                     </div>
                     
-                    {incident.affected_systems.length > 0 && (
+                    {incident.affected_systems && incident.affected_systems.length > 0 && (
                       <div>
                         <p className="text-sm font-medium text-gray-300">Affected Systems:</p>
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -544,7 +525,7 @@ export default function IncidentManagement() {
                     <div className="flex justify-between items-center pt-2 border-t border-gray-700">
                       <Select 
                         value={incident.status} 
-                        onValueChange={(value: any) => updateIncidentStatus(incident.id, value)}
+                        onValueChange={(value) => updateIncidentStatus(incident.id, value)}
                       >
                         <SelectTrigger className="w-40 bg-gray-800/50 border-gray-600 text-white">
                           <SelectValue />
@@ -632,11 +613,11 @@ export default function IncidentManagement() {
                   </div>
                   <div>
                     <label className="font-semibold text-gray-300">Priority:</label>
-                    <p className="text-gray-400">{selectedIncident.priority}/5</p>
+                    <p className="text-gray-400">{selectedIncident.priority || 3}/5</p>
                   </div>
                   <div>
                     <label className="font-semibold text-gray-300">Created:</label>
-                    <p className="text-gray-400">{new Date(selectedIncident.created_at).toLocaleString()}</p>
+                    <p className="text-gray-400">{new Date(selectedIncident.created_at || '').toLocaleString()}</p>
                   </div>
                 </div>
                 
@@ -645,7 +626,7 @@ export default function IncidentManagement() {
                   <p className="bg-gray-800/50 p-3 rounded-md text-gray-300 mt-1">{selectedIncident.description}</p>
                 </div>
                 
-                {selectedIncident.affected_systems.length > 0 && (
+                {selectedIncident.affected_systems && selectedIncident.affected_systems.length > 0 && (
                   <div>
                     <label className="font-semibold text-gray-300">Affected Systems:</label>
                     <div className="flex flex-wrap gap-2 mt-1">

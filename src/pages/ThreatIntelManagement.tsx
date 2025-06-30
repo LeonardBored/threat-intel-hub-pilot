@@ -10,19 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Edit, Trash2, Search, Shield, AlertTriangle, Eye, Filter } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/integrations/supabase/types';
 
-interface IOC {
-  id: string;
-  indicator: string;
-  type: 'ip' | 'domain' | 'url' | 'hash' | 'email';
-  threat_level: 'low' | 'medium' | 'high' | 'critical';
-  description: string;
-  source: string;
-  tags?: string[];
-  confidence_score?: number;
-  created_at: string;
-  updated_at: string;
-}
+type IOC = Tables<'iocs'>;
 
 export default function ThreatIntelManagement() {
   const [iocs, setIocs] = useState<IOC[]>([]);
@@ -34,8 +24,8 @@ export default function ThreatIntelManagement() {
   const [filterThreatLevel, setFilterThreatLevel] = useState<string>('all');
   const [formData, setFormData] = useState({
     indicator: '',
-    type: 'ip' as const,
-    threat_level: 'medium' as const,
+    type: 'ip',
+    threat_level: 'medium',
     description: '',
     source: '',
     confidence_score: 50
@@ -297,7 +287,7 @@ export default function ThreatIntelManagement() {
                 onChange={(e) => setFormData({...formData, indicator: e.target.value})}
                 className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400"
               />
-              <Select value={formData.type} onValueChange={(value: any) => setFormData({...formData, type: value})}>
+              <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
                 <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
@@ -311,7 +301,7 @@ export default function ThreatIntelManagement() {
               </Select>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Select value={formData.threat_level} onValueChange={(value: any) => setFormData({...formData, threat_level: value})}>
+              <Select value={formData.threat_level} onValueChange={(value) => setFormData({...formData, threat_level: value})}>
                 <SelectTrigger className="bg-gray-800/50 border-gray-600 text-white">
                   <SelectValue placeholder="Threat Level" />
                 </SelectTrigger>
@@ -398,7 +388,7 @@ export default function ThreatIntelManagement() {
                           {ioc.description || 'No description'}
                         </TableCell>
                         <TableCell className="text-gray-400">
-                          {new Date(ioc.created_at).toLocaleDateString()}
+                          {new Date(ioc.created_at || '').toLocaleDateString()}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
