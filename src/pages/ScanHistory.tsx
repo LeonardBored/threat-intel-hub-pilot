@@ -111,24 +111,6 @@ export default function ScanHistory() {
     }
   };
 
-  // Generate VirusTotal report URL based on target and type
-  const getVirusTotalReportUrl = (target: string, targetType?: string) => {
-    if (target.startsWith('http://') || target.startsWith('https://') || targetType === 'url') {
-      // URL scan
-      const encodedUrl = btoa(target).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      return `https://www.virustotal.com/gui/url/${encodedUrl}`;
-    } else if (target.match(/^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/) || targetType === 'hash') {
-      // Hash scan
-      return `https://www.virustotal.com/gui/file/${target}`;
-    } else if (target.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) || targetType === 'ip') {
-      // IP scan
-      return `https://www.virustotal.com/gui/ip-address/${target}`;
-    } else {
-      // Domain scan
-      return `https://www.virustotal.com/gui/domain/${target}`;
-    }
-  };
-
   // Filter scans based on search and filters
   const filteredScans = scans.filter(scan => {
     const matchesSearch = scan.target.toLowerCase().includes(searchTerm.toLowerCase());
@@ -292,21 +274,11 @@ export default function ScanHistory() {
                               variant="outline"
                               className="border-gray-600 text-gray-300 hover:bg-gray-800"
                               onClick={() => {
-                                // Open VirusTotal report in new tab
-                                if (scan.scan_type === 'virustotal') {
-                                  const virusTotalUrl = getVirusTotalReportUrl(scan.target, scan.target_type);
-                                  window.open(virusTotalUrl, '_blank');
-                                  toast({
-                                    title: "Opening VirusTotal Report",
-                                    description: `Opening report for ${scan.target}`
-                                  });
-                                } else {
-                                  toast({
-                                    title: "Scan Details",
-                                    description: `Viewing details for ${scan.target}`,
-                                    variant: "destructive"
-                                  });
-                                }
+                                // View scan details logic here
+                                toast({
+                                  title: "Scan Details",
+                                  description: `Viewing details for ${scan.target}`
+                                });
                               }}
                             >
                               <Eye className="h-4 w-4" />

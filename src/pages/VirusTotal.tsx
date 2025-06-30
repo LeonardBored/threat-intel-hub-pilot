@@ -411,38 +411,9 @@ export default function VirusTotal() {
                         </div>
                       )}
                       <div className="space-y-2">
-                        {(() => {
-                          // Separate malicious/suspicious from clean/undetected
-                          const maliciousAndSuspicious = result.vendors.filter(vendor => {
-                            if (vendor.category?.toLowerCase() === 'malicious' || vendor.category?.toLowerCase() === 'suspicious') {
-                              return true;
-                            }
-                            if (vendor.result && vendor.result !== 'Clean' && vendor.result !== 'Undetected' && vendor.result !== 'null') {
-                              const result = vendor.result.toLowerCase();
-                              return result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
-                                     result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
-                                     result.includes('ransomware') || result.includes('suspicious') || result.includes('potentially') || 
-                                     result.includes('pup') || result.includes('adware');
-                            }
-                            return false;
-                          });
-
-                          const cleanAndUndetected = result.vendors.filter(vendor => {
-                            if (vendor.category?.toLowerCase() === 'malicious' || vendor.category?.toLowerCase() === 'suspicious') {
-                              return false;
-                            }
-                            if (vendor.result && vendor.result !== 'Clean' && vendor.result !== 'Undetected' && vendor.result !== 'null') {
-                              const result = vendor.result.toLowerCase();
-                              return !(result.includes('malicious') || result.includes('trojan') || result.includes('virus') || 
-                                      result.includes('malware') || result.includes('phishing') || result.includes('backdoor') || 
-                                      result.includes('ransomware') || result.includes('suspicious') || result.includes('potentially') || 
-                                      result.includes('pup') || result.includes('adware'));
-                            }
-                            return true;
-                          });
-
-                          // Sort malicious/suspicious by priority (malicious first, then suspicious)
-                          const sortedMaliciousAndSuspicious = maliciousAndSuspicious.sort((a, b) => {
+                        {result.vendors
+                          .sort((a, b) => {
+                            // Priority order: malicious, suspicious, clean/undetected
                             const getPriority = (vendor: any) => {
                               if (vendor.category?.toLowerCase() === 'malicious') return 0;
                               if (vendor.category?.toLowerCase() === 'suspicious') return 1;
@@ -454,15 +425,11 @@ export default function VirusTotal() {
                                 if (result.includes('suspicious') || result.includes('potentially') || 
                                     result.includes('pup') || result.includes('adware')) return 1;
                               }
-                              return 2;
+                              return 2; // Clean/undetected
                             };
                             return getPriority(a) - getPriority(b);
-                          });
-
-                          // Combine arrays: malicious/suspicious first, then clean/undetected
-                          const sortedVendors = [...sortedMaliciousAndSuspicious, ...cleanAndUndetected];
-
-                          return sortedVendors.map((vendor, index) => (
+                          })
+                          .map((vendor, index) => (
                             <div 
                               key={index}
                               className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors"
@@ -482,8 +449,7 @@ export default function VirusTotal() {
                                 )}
                               </div>
                             </div>
-                          ));
-                        })()}
+                          ))}
                       </div>
                     </CardContent>
                   </Card>
