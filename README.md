@@ -1,6 +1,7 @@
 # Project info
 
 **URL**: [https://threat-intel-hub-pilot.lovable.app/](https://threat-intel-hub-pilot.vercel.app/)
+Website might be broken due to outdated API keys for external services
 
 ## Technologies are used for this project?
 
