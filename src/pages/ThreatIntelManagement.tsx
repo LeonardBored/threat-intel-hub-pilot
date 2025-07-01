@@ -13,8 +13,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRateLimit } from '@/hooks/useRateLimit';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-
 type IOC = Tables<'iocs'>;
 
 export default function ThreatIntelManagement() {
