@@ -11,7 +11,8 @@ import { Eye, Plus, Edit, Trash2, Search, Bell, BellOff, Target, AlertTriangle }
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
-import { useAuth, useRateLimit } from '@/hooks';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRateLimit } from '@/hooks/useRateLimit';
 
 // Use Supabase types for the Watchlist interface
 type Watchlist = Tables<'watchlists'>;

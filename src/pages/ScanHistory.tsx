@@ -9,7 +9,7 @@ import { History, Search, Eye, Trash2, RefreshCw, Shield, AlertTriangle, CheckCi
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 type ScanRecord = Tables<'scan_history'>;
 
