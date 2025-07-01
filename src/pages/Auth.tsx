@@ -67,10 +67,9 @@ export default function Auth() {
     setLoading(true);
     
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`
-      }
+      provider: 'google'
+      // Remove redirectTo option to let Supabase handle the redirect automatically
+      // This will use the Site URL configured in Supabase dashboard
     });
 
     if (error) {
