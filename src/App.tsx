@@ -100,22 +100,46 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/virustotal" element={<VirusTotal />} />
-              <Route path="/urlscan" element={<URLScan />} />
-              <Route path="/threat-intel" element={<ThreatIntel />} />
-              <Route path="/threat-intel-management" element={<ThreatIntelManagement />} />
-              <Route path="/scan-history" element={<ScanHistory />} />
-              <Route path="/watchlists" element={<Watchlists />} />
-              <Route path="/incidents" element={<IncidentManagement />} />
-              <Route path="/news" element={<SecurityNews />} />
-              <Route path="/docs" element={<Documentation />} />
-              <Route path="/ai-chat" element={<AIChat />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
+          <AuthProvider>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                } />
+                <Route path="/virustotal" element={<VirusTotal />} />
+                <Route path="/urlscan" element={<URLScan />} />
+                <Route path="/threat-intel" element={<ThreatIntel />} />
+                <Route path="/threat-intel-management" element={
+                  <ProtectedRoute>
+                    <ThreatIntelManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="/scan-history" element={
+                  <ProtectedRoute>
+                    <ScanHistory />
+                  </ProtectedRoute>
+                } />
+                <Route path="/watchlists" element={
+                  <ProtectedRoute>
+                    <Watchlists />
+                  </ProtectedRoute>
+                } />
+                <Route path="/incidents" element={
+                  <ProtectedRoute>
+                    <IncidentManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="/news" element={<SecurityNews />} />
+                <Route path="/docs" element={<Documentation />} />
+                <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Layout>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

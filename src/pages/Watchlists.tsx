@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,11 +11,14 @@ import { Eye, Plus, Edit, Trash2, Search, Bell, BellOff, Target, AlertTriangle }
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
+import { useAuth, useRateLimit } from '@/hooks';
 
 // Use Supabase types for the Watchlist interface
 type Watchlist = Tables<'watchlists'>;
 
 export default function Watchlists() {
+  const { user } = useAuth();
+  const { checkRateLimit } = useRateLimit();
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -37,11 +39,14 @@ export default function Watchlists() {
 
   // Fetch watchlists from database
   const fetchWatchlists = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('watchlists')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -60,6 +65,8 @@ export default function Watchlists() {
 
   // Create new watchlist
   const createWatchlist = async () => {
+    if (!user) return;
+    
     if (!formData.name.trim() || !formData.indicators.trim()) {
       toast({
         title: "Error",
@@ -68,6 +75,10 @@ export default function Watchlists() {
       });
       return;
     }
+
+    // Check rate limit
+    const canProceed = await checkRateLimit('watchlist-creation', 5);
+    if (!canProceed) return;
 
     try {
       const { data, error } = await supabase
@@ -84,7 +95,8 @@ export default function Watchlists() {
             webhook: formData.webhook_notifications
           },
           is_active: true,
-          match_count: 0
+          match_count: 0,
+          user_id: user.id
         }])
         .select()
         .single();
@@ -109,6 +121,8 @@ export default function Watchlists() {
 
   // Update watchlist
   const updateWatchlist = async (id: string) => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('watchlists')
@@ -125,6 +139,7 @@ export default function Watchlists() {
           }
         })
         .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single();
 
@@ -148,11 +163,14 @@ export default function Watchlists() {
 
   // Toggle watchlist status
   const toggleWatchlist = async (id: string, is_active: boolean) => {
+    if (!user) return;
+    
     try {
       const { error } = await supabase
         .from('watchlists')
         .update({ is_active })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -173,13 +191,16 @@ export default function Watchlists() {
 
   // Delete watchlist
   const deleteWatchlist = async (id: string) => {
+    if (!user) return;
+    
     if (!confirm('Are you sure you want to delete this watchlist?')) return;
 
     try {
       const { error } = await supabase
         .from('watchlists')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -263,8 +284,14 @@ export default function Watchlists() {
   });
 
   useEffect(() => {
-    fetchWatchlists();
-  }, []);
+    if (user) {
+      fetchWatchlists();
+    }
+  }, [user]);
+
+  if (!user) {
+    return null; // This will be handled by ProtectedRoute
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-900 p-6">

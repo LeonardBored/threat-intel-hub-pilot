@@ -24,6 +24,7 @@ export type Database = {
           threat_level: string
           type: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           confidence_score?: number | null
@@ -39,6 +40,7 @@ export type Database = {
           threat_level: string
           type: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           confidence_score?: number | null
@@ -54,6 +56,58 @@ export type Database = {
           threat_level?: string
           type?: string
           updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          created_at: string | null
+          endpoint: string
+          id: string
+          request_count: number | null
+          user_id: string
+          window_start: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          endpoint: string
+          id?: string
+          request_count?: number | null
+          user_id: string
+          window_start?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          endpoint?: string
+          id?: string
+          request_count?: number | null
+          user_id?: string
+          window_start?: string | null
         }
         Relationships: []
       }
@@ -71,6 +125,7 @@ export type Database = {
           target_type: string
           threat_score: number | null
           updated_at: string | null
+          user_id: string | null
           verdict: string | null
         }
         Insert: {
@@ -86,6 +141,7 @@ export type Database = {
           target_type: string
           threat_score?: number | null
           updated_at?: string | null
+          user_id?: string | null
           verdict?: string | null
         }
         Update: {
@@ -101,6 +157,7 @@ export type Database = {
           target_type?: string
           threat_score?: number | null
           updated_at?: string | null
+          user_id?: string | null
           verdict?: string | null
         }
         Relationships: []
@@ -128,6 +185,7 @@ export type Database = {
           timeline: Json | null
           title: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           actual_impact?: string | null
@@ -151,6 +209,7 @@ export type Database = {
           timeline?: Json | null
           title: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           actual_impact?: string | null
@@ -174,6 +233,7 @@ export type Database = {
           timeline?: Json | null
           title?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -192,6 +252,7 @@ export type Database = {
           notification_settings: Json | null
           type: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           alert_threshold?: string | null
@@ -207,6 +268,7 @@ export type Database = {
           notification_settings?: Json | null
           type: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           alert_threshold?: string | null
@@ -222,6 +284,7 @@ export type Database = {
           notification_settings?: Json | null
           type?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -230,7 +293,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      check_rate_limit: {
+        Args: {
+          p_user_id: string
+          p_endpoint: string
+          p_limit?: number
+          p_window_minutes?: number
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

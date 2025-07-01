@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,10 +10,14 @@ import { Plus, Edit, Trash2, Search, Shield, AlertTriangle, Eye, Filter } from '
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRateLimit } from '@/hooks/useRateLimit';
 
 type IOC = Tables<'iocs'>;
 
 export default function ThreatIntelManagement() {
+  const { user } = useAuth();
+  const { checkRateLimit } = useRateLimit();
   const [iocs, setIocs] = useState<IOC[]>([]);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -23,7 +26,6 @@ export default function ThreatIntelManagement() {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterThreatLevel, setFilterThreatLevel] = useState<string>('all');
   const [creating, setCreating] = useState(false);
-  const [rateLimitInfo, setRateLimitInfo] = useState<{remaining: number; resetTime: number} | null>(null);
   const [formData, setFormData] = useState({
     indicator: '',
     type: 'ip',
@@ -35,11 +37,14 @@ export default function ThreatIntelManagement() {
 
   // Fetch IOCs from database
   const fetchIOCs = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('iocs')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -58,6 +63,8 @@ export default function ThreatIntelManagement() {
 
   // Create new IOC with rate limiting
   const createIOC = async () => {
+    if (!user) return;
+    
     if (!formData.indicator.trim()) {
       toast({
         title: "Error",
@@ -67,55 +74,31 @@ export default function ThreatIntelManagement() {
       return;
     }
 
+    // Check rate limit
+    const canProceed = await checkRateLimit('ioc-creation', 10);
+    if (!canProceed) return;
+
     setCreating(true);
 
     try {
-      // Call the Edge Function with rate limiting
-      const { data: { session } } = await supabase.auth.getSession();
-      const supabaseUrl = "https://nlpytrvdrkoiozjrjrqh.supabase.co";
-      
-      const response = await fetch(`${supabaseUrl}/functions/v1/ioc-management`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5scHl0cnZkcmtvaW96anJqcnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5OTQ5MjYsImV4cCI6MjA2NjU3MDkyNn0.VvjqQDq-2U1MQJ7wLcBt0JfxDsOSJbY5T1MXILWW5Wk'
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase
+        .from('iocs')
+        .insert([{
           ...formData,
+          user_id: user.id,
           tags: []
-        })
-      });
+        }])
+        .select()
+        .single();
 
-      const result = await response.json();
+      if (error) throw error;
 
-      // Update rate limit info from response headers
-      const remaining = parseInt(response.headers.get('X-RateLimit-Remaining') || '0');
-      const resetTime = parseInt(response.headers.get('X-RateLimit-Reset') || '0') * 1000;
-      setRateLimitInfo({ remaining, resetTime });
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After');
-          toast({
-            title: "Rate Limit Exceeded",
-            description: `Too many IOC creations. Please try again in ${retryAfter} seconds.`,
-            variant: "destructive"
-          });
-          return;
-        }
-        
-        throw new Error(result.message || 'Failed to create IOC');
-      }
-
-      // Add the new IOC to the list
-      setIocs([result.data, ...iocs]);
+      setIocs([data, ...iocs]);
       resetForm();
       
-      // Show rate limit info in success message
       toast({
         title: "Success",
-        description: `IOC created successfully. ${remaining} creations remaining this hour.`
+        description: "IOC created successfully"
       });
 
     } catch (error) {
@@ -132,11 +115,14 @@ export default function ThreatIntelManagement() {
 
   // Update IOC
   const updateIOC = async (id: string) => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('iocs')
         .update(formData)
         .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single();
 
@@ -160,13 +146,16 @@ export default function ThreatIntelManagement() {
 
   // Delete IOC
   const deleteIOC = async (id: string) => {
+    if (!user) return;
+    
     if (!confirm('Are you sure you want to delete this IOC?')) return;
 
     try {
       const { error } = await supabase
         .from('iocs')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -244,8 +233,14 @@ export default function ThreatIntelManagement() {
   });
 
   useEffect(() => {
-    fetchIOCs();
-  }, []);
+    if (user) {
+      fetchIOCs();
+    }
+  }, [user]);
+
+  if (!user) {
+    return null; // This will be handled by ProtectedRoute
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 p-6">
@@ -363,27 +358,10 @@ export default function ThreatIntelManagement() {
               className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400"
               rows={3}
             />
-            {/* Rate Limit Information */}
-            {rateLimitInfo && (
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-blue-400">
-                  <Shield className="h-4 w-4" />
-                  <span className="text-sm font-medium">Rate Limit Status</span>
-                </div>
-                <div className="text-xs text-blue-300 mt-1">
-                  {rateLimitInfo.remaining} IOC creations remaining this hour
-                  {rateLimitInfo.remaining === 0 && (
-                    <span className="text-yellow-400 ml-2">
-                      (Resets at {new Date(rateLimitInfo.resetTime).toLocaleTimeString()})
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
             <div className="flex gap-2">
               <Button 
                 onClick={isEditing ? () => updateIOC(editingId!) : createIOC}
-                disabled={creating || (rateLimitInfo?.remaining === 0 && !isEditing)}
+                disabled={creating}
                 className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? 'Creating...' : (isEditing ? 'Update IOC' : 'Create IOC')}

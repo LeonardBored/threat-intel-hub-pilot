@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,10 +9,12 @@ import { History, Search, Eye, Trash2, RefreshCw, Shield, AlertTriangle, CheckCi
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
+import { useAuth } from '@/hooks/use-auth';
 
 type ScanRecord = Tables<'scan_history'>;
 
 export default function ScanHistory() {
+  const { user } = useAuth();
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,11 +24,14 @@ export default function ScanHistory() {
 
   // Fetch scan history from database
   const fetchScans = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('scan_history')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -47,13 +51,16 @@ export default function ScanHistory() {
 
   // Delete scan record
   const deleteScan = async (id: string) => {
+    if (!user) return;
+    
     if (!confirm('Are you sure you want to delete this scan record?')) return;
 
     try {
       const { error } = await supabase
         .from('scan_history')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -140,8 +147,14 @@ export default function ScanHistory() {
   });
 
   useEffect(() => {
-    fetchScans();
-  }, []);
+    if (user) {
+      fetchScans();
+    }
+  }, [user]);
+
+  if (!user) {
+    return null; // This will be handled by ProtectedRoute
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-6">
