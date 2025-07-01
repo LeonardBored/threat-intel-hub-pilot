@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,10 +10,12 @@ import { AlertTriangle, Plus, Edit, Trash2, Clock, User, Shield, Eye, Search } f
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 type SecurityIncident = Tables<'security_incidents'>;
 
 export default function IncidentManagement() {
+  const { user } = useAuth();
   const [incidents, setIncidents] = useState<SecurityIncident[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -41,6 +42,8 @@ export default function IncidentManagement() {
 
   // Fetch incidents from database
   const fetchIncidents = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -64,6 +67,15 @@ export default function IncidentManagement() {
 
   // Create new incident
   const createIncident = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create incidents",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.title.trim()) {
       toast({
         title: "Error",
@@ -78,6 +90,7 @@ export default function IncidentManagement() {
         .from('security_incidents')
         .insert([{
           ...formData,
+          user_id: user.id,
           affected_systems: formData.affected_systems.split(',').map(s => s.trim()).filter(s => s),
           tags: [],
           incident_date: new Date().toISOString()
@@ -105,6 +118,15 @@ export default function IncidentManagement() {
 
   // Update incident
   const updateIncident = async (id: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update incidents",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const updateData = {
         ...formData,
@@ -142,6 +164,15 @@ export default function IncidentManagement() {
 
   // Update incident status
   const updateIncidentStatus = async (id: string, status: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update incidents",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const updateData: any = { status };
       if ((status === 'resolved' || status === 'closed') && 
@@ -173,6 +204,15 @@ export default function IncidentManagement() {
 
   // Delete incident
   const deleteIncident = async (id: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to delete incidents",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this incident?')) return;
 
     try {
@@ -283,7 +323,22 @@ export default function IncidentManagement() {
 
   useEffect(() => {
     fetchIncidents();
-  }, []);
+  }, [user]);
+
+  // Show loading or login message if user is not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-8 text-white">
+            <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-red-400" />
+            <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
+            <p className="text-gray-400">Please log in to access incident management.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900 p-6">
