@@ -1,6 +1,4 @@
-# Welcome to your Lovable project
-
-## Project info
+# Project info
 
 **URL**: [https://threat-intel-hub-pilot.lovable.app/](https://threat-intel-hub-pilot.vercel.app/)
 
