@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Shield, Search, Copy, AlertTriangle, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,7 @@ interface ScanResult {
 }
 
 export default function VirusTotal() {
+  const { user } = useAuth();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -60,6 +62,11 @@ export default function VirusTotal() {
 
   // Function to store scan result in database
   const storeScanResult = async (target: string, scanResult: ScanResult, scanDuration: number) => {
+    if (!user) {
+      console.warn('No user authenticated, skipping scan result storage');
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('scan_history')
@@ -72,6 +79,7 @@ export default function VirusTotal() {
           verdict: scanResult.verdict === 'undetected' ? 'clean' : scanResult.verdict,
           threat_score: scanResult.stats ? Math.round((scanResult.stats.malicious + scanResult.stats.suspicious) / scanResult.stats.total * 100) : null,
           scan_duration: scanDuration,
+          user_id: user.id, // Associate scan with the authenticated user
           metadata: {
             detection_ratio: scanResult.detectionRatio,
             summary: scanResult.summary,
@@ -83,7 +91,7 @@ export default function VirusTotal() {
       if (error) {
         console.error('Error storing scan result:', error);
       } else {
-        console.log('Scan result stored successfully');
+        console.log('Scan result stored successfully for user:', user.id);
       }
     } catch (error) {
       console.error('Error storing scan result:', error);
@@ -139,15 +147,19 @@ export default function VirusTotal() {
 
       setResult(data);
       
-      // Store successful scan result in database
-      if (data && data.verdict !== 'scanning') {
+      // Store successful scan result in database only if user is logged in
+      if (user && data && data.verdict !== 'scanning') {
         await storeScanResult(processedInput, data, scanDuration);
+        toast({
+          title: "Scan Complete",
+          description: `Analysis finished for: ${processedInput}. Result saved to your scan history.`,
+        });
+      } else {
+        toast({
+          title: "Scan Complete",
+          description: `Analysis finished for: ${processedInput}. ${!user ? 'Log in to save scan history.' : ''}`,
+        });
       }
-      
-      toast({
-        title: "Scan Complete",
-        description: `Analysis finished for: ${processedInput}`,
-      });
     } catch (error) {
       console.error('Scan error:', error);
       toast({
@@ -284,6 +296,11 @@ export default function VirusTotal() {
           <h1 className="text-2xl font-bold text-primary">VirusTotal Scanner</h1>
           <p className="text-muted-foreground">
             Scan URLs, IPs, domains, and file hashes for malware detection
+            {!user && (
+              <span className="text-yellow-400 ml-2">
+                • Log in to save scan history
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -296,6 +313,11 @@ export default function VirusTotal() {
           </CardTitle>
           <CardDescription>
             Enter a URL, IP address, domain, or file hash (MD5, SHA1, SHA256) to analyze. HTTPS prefix will be added automatically for URLs.
+            {!user && (
+              <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded text-blue-300 text-sm">
+                💡 <strong>Tip:</strong> Log in to automatically save your scan results and access scan history.
+              </div>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
